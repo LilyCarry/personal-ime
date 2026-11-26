@@ -32,3 +32,11 @@ user_logs/
 Thumbs.db
 .vscode/
 .idea/
+
+# Secrets & local runtime DB
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3

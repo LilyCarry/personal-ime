@@ -1,6 +1,6 @@
-# 功能演进路线与 PR 任务清单（ROADMAP）
+# 功能演进路线与 Issue / PR 任务索引（ROADMAP）
 
-本项目拆分为**两个相对独立的目标**，并按功能模块切分为可独立开发、独立验证的 PR 任务，便于以任务式逐步推进。
+本项目采用 **一 Issue 一 PR** 的任务式推进方式，所有提交需遵循 [CONTRIBUTING.md](../CONTRIBUTING.md) 中的目录边界与自动化测试规范。
 
 ---
 
@@ -18,74 +18,30 @@ rime/lua/ (规则热加载 + 无感切换 + 提醒)       model/ (Qwen3-LoRA / 2
 
 ---
 
-## 目标一：可量化规则引擎 + 互动打字竞速网页（替代 PPT）
+## Issue 任务总览（可直接认领提 PR）
 
-核心定位：
-1. **初次校准兼课堂展示**：用网页替代传统 PPT，左侧展示原理，右侧常驻二维码与实时打字竞速排行榜（连阿里云服务器）；同学扫码打字竞速（速度 + 精准度），完成后将敲击记录直接交由 **DeepSeek** 生成趣味打字点评，并输出**可直接量化为硬编码规则的选项**（如 `ong=on`、`in=ing`、`en=eng`、`an=ang`、`z=zh`、`c=ch`、`s=sh`、`l=n`、`l=r`、`f=h` 等）。
-2. **后期无感切换（动态纠正用户画像）**：日常使用 Rime 时，后台持续统计用户在这些可量化规则维度上的真实表现，自动开启/关闭对应规则并给出轻量提醒，同时允许用户在设置中随时手动调整。
-
-### PR-1：`feat/web-race-backend` — 阿里云轻量后端与 DeepSeek 风格分析接口
-- **目录范围**：`web/server/`
-- **核心任务**：
-  - [ ] 搭建 FastAPI 轻量后端（支持部署至阿里云 ECS，通过环境变量读取 `DEEPSEEK_API_KEY`）。
-  - [ ] 定义标准可量化规则词表（如 `ong=on`, `in=ing`, `en=eng`, `an=ang`, `z=zh`, `c=ch`, `s=sh`, `l=n`, `l=r`, `f=h` 等）及 Rime `speller/algebra` 映射表。
-  - [ ] 实现 `/api/analyze` 接口：接收昵称、耗时、精准度、目标短文与用户原始拼音，调用 DeepSeek（严格 JSON 输出）返回：
-    - `title`（趣味称号）
-    - `comment`（趣味风格点评）
-    - `rules`（推荐开启的量化规则数组 + 简短原因）
-  - [ ] 增加异常/超时兜底逻辑，保证 API 抖动时接口仍可返回有效点评与规则。
-  - [ ] 实现实时排行榜存储（SQLite/内存）、`/api/leaderboard` 查询（或 WebSocket 推送）以及带口令保护的 `/api/reset` 清榜接口（方便正式展示前清零）。
-- **验收标准**：本地与阿里云均可正常启动，提交一次测试数据能在 3 秒内返回合法 JSON 并写入排行榜。
-
-### PR-2：`feat/web-stage-and-play` — 大屏演示页（替代 PPT）+ 手机打字竞速页
-- **目录范围**：`web/static/`
-- **核心任务**：
-  - [ ] **大屏展示页（`/`）**：
-    - 左侧（~65%）：支持键盘方向键切换的极简演示卡片（痛点引入 -> 现场互动与点评轮播 -> 目标一：规则量化与无感切换 -> 目标二：Transformer 后训练与小狼毫演示）。
-    - 右侧（~35%）：常驻扫码二维码 + 实时打字竞速排行榜（排名、昵称、手速、精准度、DeepSeek 称号、规则标签如 `ong=on`），自动实时刷新。
-  - [ ] **同学参赛页（`/play`）**：
-    - 适配手机竖屏与电脑浏览，输入昵称即可开始；
-    - 内置 2~3 句覆盖高频易错音素与趣味梗的测试短文，采用原始拼音敲击模式（避免被手机系统输入法自动纠错掩盖真实按键）；
-    - 实时显示速度与精准度，完赛后展示 DeepSeek 趣味点评卡片；
-    - 附带可交互的规则开关面板（默认按 DeepSeek 推荐勾选，用户可手动开关）及“复制 Rime 模糊音配置”按钮。
-- **验收标准**：手机扫码可流畅完成打字竞速、看到 DeepSeek 点评，大屏右侧排行榜实时刷新无报错。
-
-### PR-3：`feat/rime-adaptive-rules` — Rime 规则热加载、无感切换与轻量提醒
-- **目录范围**：`profiler/`、`rime/lua/`
-- **核心任务**：
-  - [ ] 定义 `user_rules.json` / `user_rules.lua` 格式，统一表达可量化的声母/韵母替换与容错开关（如 `ong=on`, `l=r`）。
-  - [ ] 编写 `profiler/rule_updater.py`：读取 `user_logs/*.jsonl` 滑动窗口日志，统计各量化规则的真实误触/省码触发率，按滞回阈值决定开启或关闭规则（动态纠正初始画像，避免频繁抖动），并同步生成 Rime `speller/algebra` 补丁。
-  - [ ] 编写 Rime 插件 `rime/lua/rule_notify.lua`（或集成至 `ime_logger.lua`）：支持规则切换时在候选注释区短暂提示用户（例如 `[规则更新: 已自动开启 ong=on]`），并支持 `F4` 菜单手动开关与一键回退。
-- **验收标准**：模拟日志中高频出现 `ong->on` 后，运行更新脚本可自动切换规则并在 Rime 候选中给出一次性轻量提醒。
+| Issue | 归属 | 标题 | 建议分支 | 依赖 | 状态 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| [#1](https://github.com/LilyCarry/personal-ime/issues/1) | 目标一 | 定义标准可量化拼音规则词表与 Rime algebra 导出模块 | `feat/issue-1-rules-schema` | 无 | Open |
+| [#2](https://github.com/LilyCarry/personal-ime/issues/2) | 目标一 | 搭建 FastAPI 竞速后端与阿里云实时排行榜 API | `feat/issue-2-web-leaderboard` | 无 | Open |
+| [#3](https://github.com/LilyCarry/personal-ime/issues/3) | 目标一 | 接入 DeepSeek 风格点评与量化规则推荐接口 (`/api/analyze`) | `feat/issue-3-deepseek-analyzer` | #1, #2 | Open |
+| [#4](https://github.com/LilyCarry/personal-ime/issues/4) | 目标一 | 开发手机/PC 扫码打字竞速与规则配置页 (`/play`) | `feat/issue-4-web-play-page` | #2, #3 | Open |
+| [#5](https://github.com/LilyCarry/personal-ime/issues/5) | 目标一 | 开发大屏互动演示页 (`/`, 替代 PPT) 与右侧实时排行榜 | `feat/issue-5-web-stage-page` | #2 | Open |
+| [#6](https://github.com/LilyCarry/personal-ime/issues/6) | 目标一 | 实现基于 Rime 日志的滑动窗口规则校准与无感切换提醒 | `feat/issue-6-rime-adaptive-rules` | #1 | Open |
+| [#7](https://github.com/LilyCarry/personal-ime/issues/7) | 目标二 | 寝室双人（本人 vs 室友）个性化 LoRA 对比微调与案例集 | `feat/issue-7-persona-compare` | 无 | Open |
+| [#8](https://github.com/LilyCarry/personal-ime/issues/8) | 目标二 | 训练前后评测基准与消融实验报告 (`docs/EVALUATION.md`) | `docs/issue-8-eval-benchmark` | 无 | Open |
 
 ---
 
-## 目标二：基于个人习惯的端侧预测与纠错模型（Transformer 后训练）
+## 并行推进建议
 
-核心定位：针对规则层无法解决的上下文消歧与重度错拼，利用个人击键习惯合成数据，在用户自己的电脑/空闲时段做本地后训练，并通过拼音 Trie 约束消除模型幻觉。
-
-> 展示定位：由于模型个性化依赖长期真实使用日志积累，课堂现场重点提供目标一的实时扫码体验；目标二采用**寝室小范围试用（本人 vs 室友）**作为实证案例，直观展示**“同一个输入在不同人的专属模型上产生不同个性化输出”**以及训练前后的纠错对比。
-
-### PR-4：`feat/personal-vs-roommate-demo` — 寝室双人个性化对比微调与案例集
-- **目录范围**：`model/`、`profiler/`
-- **核心任务**：
-  - [ ] 采集/构造两组不同输入风格与用词偏好的样本（本人 vs 室友），分别跑通 Qwen3-0.6B LoRA（或 29M 模型）个性化后训练。
-  - [ ] 整理典型对比用例集 `cases_compare.json`：同一段错拼/简拼输入，分别展示「原生 Rime / 通用底座 / 本人模型 / 室友模型」的候选输出差异，体现真实个性化效果。
-  - [ ] （可选）补充简化版周期微调脚本 `model/weekly_update.py`，串联“日志 -> 噪声更新 -> LoRA 增量微调”流程用于架构演示。
-- **验收标准**：能复现至少 5~10 组“同输入、不同人不同结果”的清晰对比案例，可直接嵌入大屏展示页的互动对比卡片。
-
-### PR-5：`docs/eval-benchmark` — 训练前后对比评测与展示素材整理
-- **目录范围**：`model/`、`docs/`
-- **核心任务**：
-  - [ ] 在真实个人日志测试集 `real_eval.json` 上跑出训练前后对比指标（Top-1 / Top-3 准确率、单次推理延迟）：
-    - 原生 Rime 雾凇拼音 vs 29M 字级模型 vs Qwen3-0.6B LoRA（自由解码 / 拼音 Trie 约束解码）。
-  - [ ] 整理对比结论与双人个性化案例写入 `docs/EVALUATION.md`，同步接入大屏展示页（`web/static/`）的对应演示卡片。
-- **验收标准**：具备可复现的评测数据与直观的双人对比案例，满足大屏展示与课程汇报需要。
+- **第一批（零依赖，可立刻同时认领）**：`#1`、`#2`、`#7`、`#8`
+- **第二批（`#1`、`#2` 合入后）**：`#3`、`#5`、`#6`
+- **第三批（`#3` 合入后联调）**：`#4`
 
 ---
 
-## PR 协作与分支约定
+## 展示定位说明
 
-- 每个功能从 `main` 切出独立分支，命名遵循 `feat/<模块>-<功能>` 或 `docs/<主题>`；
-- 提交前确保不包含 `checkpoints/`、`data/`、`*.jsonl` 个人日志及任何 API Key / 私钥；
-- 合并到 `main` 后及时勾选本文档对应任务的复选框。
+- **现场实时体验（目标一）**：课堂直接打开大屏演示页（`/`），左侧翻页讲原理，右侧常驻二维码与实时排行榜；全班扫码进 `/play` 进行打字竞速，完赛后由 DeepSeek 生成趣味点评并推荐可量化规则（如 `ong=on`, `l=r`）。
+- **寝室小范围实证（目标二）**：模型个性化依赖长期真实日志，课堂上通过寝室双人（本人 vs 室友）对比案例，直观展示“同一个错拼/简拼输入在不同人的专属模型上产生不同输出”的效果差异。

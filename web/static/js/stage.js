@@ -1,9 +1,6 @@
 (() => {
   "use strict";
 
-  /**
-   * 纯原生 QR 编码器（Byte 模式 + ECC Level M，支持 Version 1..8）。
-   */
   const QREncoder = (() => {
     const GF_EXP = new Uint8Array(512);
     const GF_LOG = new Uint8Array(256);
@@ -15,16 +12,12 @@
         x <<= 1;
         if (x & 0x100) x ^= 0x11d;
       }
-      for (let i = 255; i < 512; i += 1) {
-        GF_EXP[i] = GF_EXP[i - 255];
-      }
+      for (let i = 255; i < 512; i += 1) GF_EXP[i] = GF_EXP[i - 255];
     }
-
     function gfMul(a, b) {
       if (a === 0 || b === 0) return 0;
       return GF_EXP[GF_LOG[a] + GF_LOG[b]];
     }
-
     function rsGeneratorPoly(degree) {
       let poly = [1];
       for (let i = 0; i < degree; i += 1) {
@@ -38,7 +31,6 @@
       }
       return poly;
     }
-
     function rsComputeEc(data, ecCount) {
       const gen = rsGeneratorPoly(ecCount);
       const work = new Uint8Array(data.length + ecCount);
@@ -46,14 +38,11 @@
       for (let i = 0; i < data.length; i += 1) {
         const coef = work[i];
         if (coef !== 0) {
-          for (let j = 0; j < gen.length; j += 1) {
-            work[i + j] ^= gfMul(gen[j], coef);
-          }
+          for (let j = 0; j < gen.length; j += 1) work[i + j] ^= gfMul(gen[j], coef);
         }
       }
       return work.slice(data.length);
     }
-
     const VERSIONS_M = [
       null,
       { v: 1, size: 21, dataCw: 16, ecPerBlock: 10, blocks: [16], align: [] },
@@ -65,52 +54,39 @@
       { v: 7, size: 45, dataCw: 124, ecPerBlock: 18, blocks: [31, 31, 31, 31], align: [6, 22, 38] },
       { v: 8, size: 49, dataCw: 154, ecPerBlock: 22, blocks: [38, 38, 39, 39], align: [6, 24, 42] },
     ];
-
     function bchFormatInfo(maskId) {
       const data = maskId & 0x07;
       let rem = data << 10;
       const poly = 0x537;
-      for (let bit = 14; bit >= 10; bit -= 1) {
-        if ((rem >> bit) & 1) rem ^= poly << (bit - 10);
-      }
+      for (let bit = 14; bit >= 10; bit -= 1) if ((rem >> bit) & 1) rem ^= poly << (bit - 10);
       return ((data << 10) | rem) ^ 0x5412;
     }
-
     function bchVersionInfo(version) {
       let rem = version << 12;
       const poly = 0x1f25;
-      for (let bit = 17; bit >= 12; bit -= 1) {
-        if ((rem >> bit) & 1) rem ^= poly << (bit - 12);
-      }
+      for (let bit = 17; bit >= 12; bit -= 1) if ((rem >> bit) & 1) rem ^= poly << (bit - 12);
       return (version << 12) | rem;
     }
-
     function encodeBytes(text) {
       const bytes = new TextEncoder().encode(text);
-      let spec = null;
+      let spec = VERSIONS_M[VERSIONS_M.length - 1];
       for (let v = 1; v < VERSIONS_M.length; v += 1) {
         if (bytes.length <= VERSIONS_M[v].dataCw - 2) {
           spec = VERSIONS_M[v];
           break;
         }
       }
-      if (!spec) spec = VERSIONS_M[VERSIONS_M.length - 1];
       const payload = bytes.slice(0, spec.dataCw - 2);
-
       const bits = [];
       const pushBits = (val, len) => {
         for (let i = len - 1; i >= 0; i -= 1) bits.push((val >> i) & 1);
       };
-
       pushBits(0b0100, 4);
       pushBits(payload.length, 8);
       for (let i = 0; i < payload.length; i += 1) pushBits(payload[i], 8);
-
-      const maxDataBits = spec.dataCw * 8;
-      const termLen = Math.min(4, maxDataBits - bits.length);
+      const termLen = Math.min(4, spec.dataCw * 8 - bits.length);
       for (let i = 0; i < termLen; i += 1) bits.push(0);
       while (bits.length % 8 !== 0) bits.push(0);
-
       const dataCw = [];
       for (let i = 0; i < bits.length; i += 8) {
         let byte = 0;
@@ -123,7 +99,6 @@
         dataCw.push(padBytes[padIdx % 2]);
         padIdx += 1;
       }
-
       const dataBlocks = [];
       const ecBlocks = [];
       let offset = 0;
@@ -133,27 +108,21 @@
         dataBlocks.push(chunk);
         ecBlocks.push(rsComputeEc(chunk, spec.ecPerBlock));
       }
-
       const finalCw = [];
       const maxBlockLen = Math.max(...spec.blocks);
       for (let i = 0; i < maxBlockLen; i += 1) {
-        for (const blk of dataBlocks) {
-          if (i < blk.length) finalCw.push(blk[i]);
-        }
+        for (const blk of dataBlocks) if (i < blk.length) finalCw.push(blk[i]);
       }
       for (let i = 0; i < spec.ecPerBlock; i += 1) {
         for (const ecBlk of ecBlocks) finalCw.push(ecBlk[i]);
       }
-
       const size = spec.size;
       const grid = Array.from({ length: size }, () => new Int8Array(size).fill(-1));
       const reserved = Array.from({ length: size }, () => new Uint8Array(size));
-
       const setMod = (r, c, val, isFunc) => {
         grid[r][c] = val ? 1 : 0;
         if (isFunc) reserved[r][c] = 1;
       };
-
       const drawFinder = (r0, c0) => {
         for (let dr = -1; dr <= 7; dr += 1) {
           for (let dc = -1; dc <= 7; dc += 1) {
@@ -167,11 +136,9 @@
           }
         }
       };
-
       drawFinder(0, 0);
       drawFinder(0, size - 7);
       drawFinder(size - 7, 0);
-
       for (const cr of spec.align) {
         for (const cc of spec.align) {
           if (reserved[cr][cc]) continue;
@@ -183,12 +150,10 @@
           }
         }
       }
-
       for (let i = 8; i < size - 8; i += 1) {
         if (!reserved[6][i]) setMod(6, i, i % 2 === 0, true);
         if (!reserved[i][6]) setMod(i, 6, i % 2 === 0, true);
       }
-
       setMod(size - 8, 8, 1, true);
       for (let i = 0; i < 9; i += 1) {
         if (!reserved[8][i]) reserved[8][i] = 1;
@@ -198,7 +163,6 @@
         reserved[8][size - 1 - i] = 1;
         reserved[size - 1 - i][8] = 1;
       }
-
       if (spec.v >= 7) {
         const verBits = bchVersionInfo(spec.v);
         for (let i = 0; i < 18; i += 1) {
@@ -209,11 +173,8 @@
           setMod(c, r, bit, true);
         }
       }
-
       const streamBits = [];
-      for (const cw of finalCw) {
-        for (let b = 7; b >= 0; b -= 1) streamBits.push((cw >> b) & 1);
-      }
+      for (const cw of finalCw) for (let b = 7; b >= 0; b -= 1) streamBits.push((cw >> b) & 1);
       let bitIdx = 0;
       let dir = -1;
       for (let col = size - 1; col > 0; col -= 2) {
@@ -230,7 +191,6 @@
         }
         dir = -dir;
       }
-
       const maskFns = [
         (r, c) => (r + c) % 2 === 0,
         (r) => r % 2 === 0,
@@ -241,7 +201,6 @@
         (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
         (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0,
       ];
-
       function applyFormat(mat, maskId) {
         const fmt = bchFormatInfo(maskId);
         for (let i = 0; i < 15; i += 1) {
@@ -250,12 +209,10 @@
           else if (i < 8) mat[i + 1][8] = bit;
           else if (i === 8) mat[8][7] = bit;
           else mat[8][14 - i] = bit;
-
           if (i < 8) mat[8][size - 1 - i] = bit;
           else mat[size - 15 + i][8] = bit;
         }
       }
-
       function calcPenalty(mat) {
         let score = 0;
         for (let r = 0; r < size; r += 1) {
@@ -286,7 +243,6 @@
         }
         return score;
       }
-
       let bestMat = null;
       let bestPenalty = Infinity;
       for (let m = 0; m < 8; m += 1) {
@@ -306,7 +262,6 @@
       }
       return bestMat;
     }
-
     function createSvg(text) {
       const mat = encodeBytes(text);
       const size = mat.length;
@@ -318,13 +273,11 @@
       svg.setAttribute("role", "img");
       svg.setAttribute("aria-label", `扫码进入 ${text}`);
       svg.setAttribute("shape-rendering", "crispEdges");
-
       const bg = document.createElementNS(ns, "rect");
       bg.setAttribute("width", String(full));
       bg.setAttribute("height", String(full));
       bg.setAttribute("fill", "#ffffff");
       svg.appendChild(bg);
-
       let pathData = "";
       for (let r = 0; r < size; r += 1) {
         for (let c = 0; c < size; c += 1) {
@@ -337,24 +290,23 @@
       svg.appendChild(path);
       return svg;
     }
-
     return { createSvg };
   })();
 
   const WX_STEP_DATA = [
     {
-      badge: "第 1 次打自造句「签到了快起床」（效果不如意）",
+      badge: "第 1 次打自造句（效果不如意）",
       keys: "qian'd'l'kuai'q'c",
       cands: ["1 钱多了快去吃", "2 钱到了快去吃", "3 前端", "4 签到"],
       top1Miss: true,
-      note: "即使敲出了完整音节 kuai，通用统计依然优先把「钱多了快去吃」放在第一位。",
+      note: "即使敲出完整 kuai，通用统计依然优先给出「钱多了快去吃」。",
     },
     {
-      badge: "手动纠正一次后，第 2 次打甚至省掉 kuai -> k",
+      badge: "纠正上屏一次后，第 2 次打省掉 kuai -> k",
       keys: "qian'd'l'k'q'c",
       cands: ["1 签到了快起床", "2 签订了看清楚", "3 签到了", "4 前端"],
       top1Miss: false,
-      note: "第二次打即使把 kuai 省略成单字母 k，输入法依然能顺着上下文记忆直接吐出「签到了快起床」。",
+      note: "第二次打即使省成单字母 k，也能结合上下文直接记住「签到了快起床」。",
     },
   ];
 
@@ -575,7 +527,7 @@
   ];
 
   const TOTAL_SLIDES = 9;
-  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页「现场互动」自动展开右侧榜单
+  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页自动呼出右侧榜单
   const POLL_INTERVAL_MS = 2000;
   const WALL_ROTATE_MS = 4500;
 
@@ -597,13 +549,14 @@
     compareCases: BUILTIN_COMPARE_CASES,
     compareSourceLabel: "内置实证案例 (8 组)",
     currentCaseIndex: 0,
-    revealStep: 3, // 3 = show all, 1 = base only, 2 = base + A
+    revealStep: 1, // 第 9 页初始只显示通用底座，点击或按 Space 逐步揭晓本人与室友模型
   };
 
   const el = {
     stageShell: document.getElementById("stage-shell"),
     stageRight: document.getElementById("stage-right"),
     hudChapterName: document.getElementById("hud-chapter-name"),
+    revealAllBtn: document.getElementById("reveal-all-btn"),
     toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
     slideCards: Array.from(document.querySelectorAll(".slide-card")),
     slideCounter: document.getElementById("slide-counter"),
@@ -612,17 +565,14 @@
     nextSlideBtn: document.getElementById("next-slide-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
 
-    // Slide 1 interactive WeChat demos
     wxDemo1Keys: document.getElementById("wx-demo1-keys"),
     replayWx1Btn: document.getElementById("replay-wx1-btn"),
     wxStepTabs: Array.from(document.querySelectorAll(".wx-step-tab")),
     wxStepDisplay: document.getElementById("wx-step-display"),
 
-    // Slide 2 WeType interactive pipeline
     wtNodes: Array.from(document.querySelectorAll("#wt-stage-bar .wt-node")),
     wtDetailStage: document.getElementById("wt-detail-stage"),
 
-    // Slide 4 compiler
     ruleDemoTabs: document.getElementById("rule-demo-tabs"),
     compilerRuleId: document.getElementById("compiler-rule-id"),
     compilerAlias: document.getElementById("compiler-alias"),
@@ -630,7 +580,6 @@
     compilerDesc: document.getElementById("compiler-desc"),
     compilerYaml: document.getElementById("compiler-yaml"),
 
-    // Slide 5 interaction wall
     wallTotalCount: document.getElementById("wall-total-count"),
     wallToggleBtn: document.getElementById("wall-toggle-btn"),
     wallNextBtn: document.getElementById("wall-next-btn"),
@@ -638,7 +587,6 @@
     spotlightBox: document.getElementById("spotlight-box"),
     recentFeedList: document.getElementById("recent-feed-list"),
 
-    // Slide 6 hysteresis simulator
     hystSlider: document.getElementById("hyst-slider"),
     hystRateVal: document.getElementById("hyst-rate-val"),
     hystStateBadge: document.getElementById("hyst-state-badge"),
@@ -648,18 +596,15 @@
     svgNodeMid: document.getElementById("svg-node-mid"),
     svgNodeOn: document.getElementById("svg-node-on"),
 
-    // Slide 7 noise sim & BPE toggle
     simTabs: document.getElementById("sim-tabs"),
     simPipelineView: document.getElementById("sim-pipeline-view"),
     bpeToggleBtn: document.getElementById("bpe-toggle-btn"),
     bpeModeBad: document.getElementById("bpe-mode-bad"),
     bpeModeGood: document.getElementById("bpe-mode-good"),
 
-    // Slide 8 bridge explorer
     bridgeNodes: Array.from(document.querySelectorAll("#bridge-node-bar .wt-node")),
     bridgeDetailBox: document.getElementById("bridge-detail-box"),
 
-    // Slide 9 compare cases
     casesSourceBadge: document.getElementById("cases-source-badge"),
     casesFileInput: document.getElementById("cases-file-input"),
     revealModelsBtn: document.getElementById("reveal-models-btn"),
@@ -676,7 +621,6 @@
     prevCaseBtn: document.getElementById("prev-case-btn"),
     nextCaseBtn: document.getElementById("next-case-btn"),
 
-    // Right sidebar
     qrWrap: document.getElementById("qr-canvas-wrap"),
     playUrlLink: document.getElementById("play-url-link"),
     copyPlayUrlBtn: document.getElementById("copy-play-url-btn"),
@@ -685,7 +629,6 @@
     lbTotalBadge: document.getElementById("lb-total-badge"),
     leaderboardList: document.getElementById("leaderboard-list"),
 
-    // Reset modal
     resetTriggerBtn: document.getElementById("reset-trigger-btn"),
     resetModal: document.getElementById("reset-modal"),
     resetCloseBtn: document.getElementById("reset-close-btn"),
@@ -730,15 +673,55 @@
     if (!isoStr) return "";
     const date = new Date(isoStr);
     if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   }
 
-  // ---- Navigation with directional motion ----
+  // ---- Progressive Reveal Engine (click veiled cards or press Space) ----
+  function revealElement(node) {
+    if (!node || !node.classList.contains("is-veiled")) return false;
+    node.classList.remove("is-veiled");
+    node.classList.add("is-revealed");
+    return true;
+  }
+
+  function revealNextInCurrentSlide() {
+    const card = el.slideCards[state.currentSlide];
+    if (!card) return;
+
+    // 1. Check veiled blocks
+    const nextVeiled = card.querySelector(".is-veiled");
+    if (nextVeiled) {
+      revealElement(nextVeiled);
+      return;
+    }
+    // 2. Slide 2 or Slide 8 stage steps
+    if (state.currentSlide === 1 && state.wtStageIdx < WETYPE_STAGES.length - 1) {
+      state.wtStageIdx += 1;
+      renderWtStage();
+      return;
+    }
+    if (state.currentSlide === 7 && state.bridgeStageIdx < BRIDGE_NODES.length - 1) {
+      state.bridgeStageIdx += 1;
+      renderBridgeStage();
+      return;
+    }
+    // 3. Slide 9 concealed models
+    if (state.currentSlide === 8 && state.revealStep < 3) {
+      state.revealStep += 1;
+      applyRevealState();
+    }
+  }
+
+  function revealAllInCurrentSlide() {
+    const card = el.slideCards[state.currentSlide];
+    if (!card) return;
+    card.querySelectorAll(".is-veiled").forEach((node) => revealElement(node));
+    if (state.currentSlide === 8) {
+      state.revealStep = 3;
+      applyRevealState();
+    }
+  }
+
   function renderSlideDots() {
     el.slideDots.innerHTML = "";
     for (let i = 0; i < TOTAL_SLIDES; i += 1) {
@@ -760,9 +743,7 @@
       const active = idx === target;
       card.hidden = !active;
       card.classList.remove("is-active", "anim-forward", "anim-back");
-      if (active) {
-        card.classList.add("is-active", forward ? "anim-forward" : "anim-back");
-      }
+      if (active) card.classList.add("is-active", forward ? "anim-forward" : "anim-back");
     });
 
     const activeCard = el.slideCards[target];
@@ -780,45 +761,10 @@
     }
   }
 
-  // ---- Interactive Expandable Accordions ----
-  function bindExpandables() {
-    document.querySelectorAll("[data-expandable]").forEach((block) => {
-      const trigger = block.querySelector(".block-trigger");
-      if (!trigger) return;
-      trigger.addEventListener("click", () => {
-        const isOpen = block.classList.contains("is-open");
-        // 如果是手风琴组，展开当前项时收起同组兄弟项，保持版面干净无溢出
-        const parentStack = block.parentElement;
-        if (parentStack && parentStack.classList.contains("accordion-stack") && !isOpen) {
-          parentStack.querySelectorAll("[data-expandable].is-open").forEach((sib) => {
-            if (sib !== block) {
-              sib.classList.remove("is-open");
-              const sibTrigger = sib.querySelector(".block-trigger");
-              if (sibTrigger) sibTrigger.setAttribute("aria-expanded", "false");
-            }
-          });
-        }
-        if (parentStack && parentStack.classList.contains("highlights-flow") && !isOpen) {
-          parentStack.querySelectorAll("[data-expandable].is-open").forEach((sib) => {
-            if (sib !== block) {
-              sib.classList.remove("is-open");
-              const sibTrigger = sib.querySelector(".block-trigger");
-              if (sibTrigger) sibTrigger.setAttribute("aria-expanded", "false");
-            }
-          });
-        }
-        block.classList.toggle("is-open", !isOpen);
-        trigger.setAttribute("aria-expanded", String(!isOpen));
-      });
-    });
-  }
-
-  // ---- Slide 1: WeChat progressive demo & typing replay ----
+  // ---- Slide 1 ----
   function renderWxStep() {
     const data = WX_STEP_DATA[state.wxStepIdx];
-    el.wxStepTabs.forEach((btn, idx) => {
-      btn.classList.toggle("is-active", idx === state.wxStepIdx);
-    });
+    el.wxStepTabs.forEach((btn, idx) => btn.classList.toggle("is-active", idx === state.wxStepIdx));
     el.wxStepDisplay.innerHTML = "";
 
     const badge = document.createElement("div");
@@ -844,7 +790,6 @@
     const note = document.createElement("p");
     note.className = "micro-note";
     note.textContent = data.note;
-
     el.wxStepDisplay.append(badge, inputLine, bar, note);
   }
 
@@ -864,20 +809,20 @@
     }, 95);
   }
 
-  // ---- Slide 2: WeType interactive stage explorer ----
+  // ---- Slide 2 ----
   function renderWtStage() {
     el.wtNodes.forEach((node, idx) => {
       node.classList.toggle("is-active", idx === state.wtStageIdx);
+      node.classList.toggle("is-dimmed", idx > state.wtStageIdx);
     });
     const cur = WETYPE_STAGES[state.wtStageIdx];
     el.wtDetailStage.innerHTML = "";
 
     const title = document.createElement("h3");
-    title.style.margin = "0 0 4px";
     title.textContent = cur.title;
 
     const desc = document.createElement("p");
-    desc.className = "body-copy";
+    desc.className = "wt-detail-desc";
     desc.textContent = cur.desc;
 
     const grid = document.createElement("div");
@@ -896,7 +841,7 @@
     el.wtDetailStage.append(title, desc, grid);
   }
 
-  // ---- Slide 4: Interactive Rule Compiler ----
+  // ---- Slide 4 ----
   function renderRuleCompilerDemo() {
     el.ruleDemoTabs.innerHTML = "";
     RULE_COMPILER_DEMOS.forEach((item, idx) => {
@@ -924,7 +869,7 @@
     ].join("\n");
   }
 
-  // ---- Slide 5: Interaction Wall ----
+  // ---- Slide 5 ----
   function renderInteractionWall() {
     const items = state.recentComments;
     el.wallTotalCount.textContent = String(state.totalCount);
@@ -1030,7 +975,7 @@
     });
   }
 
-  // ---- Slide 6: Interactive Hysteresis Simulator ----
+  // ---- Slide 6 ----
   function updateHystSimulation(rateVal) {
     const rate = Number(rateVal);
     el.hystRateVal.textContent = `${rate}%`;
@@ -1058,7 +1003,7 @@
     }
   }
 
-  // ---- Slide 7: Noise Simulator & BPE Toggle ----
+  // ---- Slide 7 ----
   function renderNoiseSimDemo() {
     el.simTabs.innerHTML = "";
     NOISE_SIM_DEMOS.forEach((item, idx) => {
@@ -1088,25 +1033,24 @@
     el.bpeToggleBtn.textContent = state.bpeShowGood ? "切回 BPE 盲区对比" : "切换为单字母分词";
   }
 
-  // ---- Slide 8: Bridge Node Explorer ----
+  // ---- Slide 8 ----
   function renderBridgeStage() {
     el.bridgeNodes.forEach((node, idx) => {
       node.classList.toggle("is-active", idx === state.bridgeStageIdx);
+      node.classList.toggle("is-dimmed", idx > state.bridgeStageIdx);
     });
     const cur = BRIDGE_NODES[state.bridgeStageIdx];
     el.bridgeDetailBox.innerHTML = "";
 
     const title = document.createElement("h3");
-    title.style.margin = "0 0 6px";
     title.textContent = cur.title;
 
     const desc = document.createElement("p");
-    desc.className = "body-copy";
+    desc.className = "wt-detail-desc";
     desc.textContent = cur.desc;
 
     const tags = document.createElement("div");
     tags.className = "noise-chips";
-    tags.style.marginTop = "10px";
     cur.tags.forEach((t) => {
       const span = document.createElement("span");
       span.className = "tag-pill is-blue";
@@ -1117,7 +1061,7 @@
     el.bridgeDetailBox.append(title, desc, tags);
   }
 
-  // ---- Slide 9: Dorm Compare Cases ----
+  // ---- Slide 9 ----
   function normalizePredList(pred) {
     if (Array.isArray(pred)) {
       return pred.slice(0, 3).map((item) => {
@@ -1155,7 +1099,7 @@
     el.colUserA.classList.toggle("is-concealed", state.revealStep < 2);
     el.colUserB.classList.toggle("is-concealed", state.revealStep < 3);
     el.revealModelsBtn.textContent =
-      state.revealStep >= 3 ? "逐步对比" : `揭晓下一模型 (${state.revealStep}/3)`;
+      state.revealStep >= 3 ? "重放逐步对比" : `揭晓下一模型 (${state.revealStep}/3)`;
   }
 
   function renderCompareCases() {
@@ -1319,7 +1263,6 @@
     }
   }
 
-  // ---- Fullscreen & Reset Modal ----
   function updateFullscreenLabel() {
     el.fullscreenBtn.textContent = document.fullscreenElement ? "退出全屏" : "全屏";
   }
@@ -1413,11 +1356,19 @@
   }
 
   function bindEvents() {
-    bindExpandables();
+    // 点击任何未揭晓的遮罩块，平滑揭晓
+    document.querySelectorAll("[data-step]").forEach((node) => {
+      node.addEventListener("click", () => {
+        revealElement(node);
+      });
+    });
 
-    // 段落关键词线索跳转
+    el.revealAllBtn.addEventListener("click", revealAllInCurrentSlide);
+
+    // 问题导向线索链接跳转
     document.querySelectorAll("[data-goto]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const target = Number(btn.dataset.goto);
         if (!Number.isNaN(target)) goToSlide(target);
       });
@@ -1433,16 +1384,18 @@
       setSidebarVisible(!state.sidebarVisible);
     });
 
-    // Slide 1 WeChat interactions
-    el.replayWx1Btn.addEventListener("click", replayWxKeystrokes);
+    el.replayWx1Btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      replayWxKeystrokes();
+    });
     el.wxStepTabs.forEach((btn, idx) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         state.wxStepIdx = idx;
         renderWxStep();
       });
     });
 
-    // Slide 2 WeType interactive pipeline
     el.wtNodes.forEach((node, idx) => {
       node.addEventListener("click", () => {
         state.wtStageIdx = idx;
@@ -1450,19 +1403,16 @@
       });
     });
 
-    // Slide 6 Hysteresis slider
     el.hystSlider.addEventListener("input", (e) => updateHystSimulation(e.target.value));
     el.hystPresetBtns.forEach((btn) => {
       btn.addEventListener("click", () => updateHystSimulation(btn.dataset.rate));
     });
 
-    // Slide 7 BPE toggle
     el.bpeToggleBtn.addEventListener("click", () => {
       state.bpeShowGood = !state.bpeShowGood;
       renderBpeToggle();
     });
 
-    // Slide 8 Bridge explorer
     el.bridgeNodes.forEach((node, idx) => {
       node.addEventListener("click", () => {
         state.bridgeStageIdx = idx;
@@ -1470,10 +1420,20 @@
       });
     });
 
-    // Slide 9 progressive reveal
     el.revealModelsBtn.addEventListener("click", () => {
       state.revealStep = state.revealStep >= 3 ? 1 : state.revealStep + 1;
       applyRevealState();
+    });
+
+    // Slide 9 click concealed model column directly to reveal
+    [el.colUserA, el.colUserB].forEach((col, offset) => {
+      col.addEventListener("click", () => {
+        const needed = offset + 2;
+        if (state.revealStep < needed) {
+          state.revealStep = needed;
+          applyRevealState();
+        }
+      });
     });
 
     window.addEventListener("keydown", (e) => {
@@ -1484,7 +1444,10 @@
       const tag = document.activeElement?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
 
-      if (e.key === "ArrowRight" || e.key === "PageDown") {
+      if (e.key === " ") {
+        e.preventDefault();
+        revealNextInCurrentSlide();
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
         goToSlide(state.currentSlide + 1);
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {

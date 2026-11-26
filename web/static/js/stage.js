@@ -1,26 +1,196 @@
-(() => {
+(function () {
   "use strict";
 
-  const QREncoder = (() => {
+  const STAGE_WIDTH = 1920;
+  const STAGE_HEIGHT = 1080;
+  const POLL_INTERVAL_MS = 2000;
+  const INTERACTIVE_SLIDE_INDEX = 4; // Auto-open right sidebar at Slide 5
+
+  // ---------------------------------------------------------------------------
+  // Built-in Data Models
+  // ---------------------------------------------------------------------------
+  const WX_STEPS = [
+    {
+      lead: "第 1 次敲 <code class=\"keystream\">qian'd'l'kuai'q'c</code>，首推仍偏离个人原意",
+      items: [
+        { text: "1 钱多了快去吃", cls: "is-miss" },
+        { text: "2 签到了快起床", cls: "" },
+        { text: "3 签到了快去吃", cls: "" },
+      ],
+      note: "第一次打自造句“签到了快起床”，哪怕多敲声韵母也很容易被通用词频带偏成“钱多了快去吃”。",
+    },
+    {
+      lead: "纠正上屏一次后，第 2 次直接省敲成 <code class=\"keystream\">qian'd'l'k'q'c</code>",
+      items: [
+        { text: "1 签到了快起床", cls: "is-winner" },
+        { text: "2 签订了看清楚", cls: "" },
+        { text: "3 签到了", cls: "" },
+      ],
+      note: "第 2 次把 kuai 缩成单字母 k，输入法仍根据个人上下文直接把“签到了快起床”顶回第 1 位。",
+    },
+  ];
+
+  const WT_STAGES = [
+    {
+      title: "STEP 01 · 按键流物理坐标与残缺采样",
+      sub: "把每次触击视为二维高斯概率云，不再死等完整四键全拼。",
+      cards: [
+        { title: "简拼/漏敲编码", body: "同时兼容声母首字母 (wmxqcf)、漏介母 (kai->kuai) 与音节换序。" },
+        { title: "2D 键盘坐标距离", body: "基于 QWERTY 键心坐标计算 P(x,y | k) 似然，识别手指顺带误触旁键。" },
+        { title: "端侧先验直出", body: "输入越短越不完整，噪声通道得分越依赖用户上下文语言模型打分反超。" },
+      ],
+    },
+    {
+      title: "STEP 02 · 模糊音节图与 Prefix Trie 展开",
+      sub: "在同一张有向无环图 (DAG) 上并行保留标准音与易混音路径。",
+      cards: [
+        { title: "全拼/模糊并联", body: "自动扩展平翘舌 (zh=z)、前后鼻音 (eng=en)、n=l 等多条候选路径。" },
+        { title: "音节边界无空格切分", body: "不依赖分词空格，动态规划切出每一种合法汉字读音拼接。" },
+        { title: "前缀树剪枝", body: "通过汉字读音 Trie 将候选严格压缩在合法汉语拼音边界内部。" },
+      ],
+    },
+    {
+      title: "STEP 03 · 多级语言模型重排（「空间换时间」）",
+      sub: "用庞大的 L1/L2 存储与计算预算换取毫秒响应——这也是商业软件臃肿与隐私担忧的根源。",
+      cards: [
+        { title: "L1 本地大词库 (< 5ms)", body: "百兆级别静态词库 + 热词缓存，以「空间换时间」覆盖约 80% 常规命中。" },
+        { title: "L2 端侧神经 LM (10~30ms)", body: "几十 MB 量化神经网络对长句与 Top-K 候选做上下文联合打分。" },
+        { title: "L3 云端 LLM 异步联想", body: "重度简拼与长上下文异步上传云端补强——隐私输入的最敏感边界。", warn: true },
+      ],
+    },
+    {
+      title: "STEP 04 · 重排输出与 Personal-IME 的破局点",
+      sub: "结合上下文与按键惩罚联合打分，同时也暴露出商业闭源方案的 3 个硬伤。",
+      cards: [
+        { title: "公式本质", body: "W* = argmax [ log P_LM(W | Context) + log P_Key(K | W) ]。" },
+        { title: "痛点：策略固化难定制", body: "通用词库无法按个人自造句与错拼偏好调整惩罚，越常用越觉得臃肿。", warn: true },
+        { title: "破局：Rime + 本地闭环", body: "开源本地化：3 句规则冷启动 + 500 滑窗自切换 + 专属端侧小模型。", warn: false },
+      ],
+    },
+  ];
+
+  const RIME_RULES = [
+    { id: "fuzzy_z_zh", label: "z = zh", line: "derive/^z([^h])/zh$1/\n    - derive/^zh/z/" },
+    { id: "fuzzy_eng_en", label: "eng = en", line: "derive/([aeiou])ng$/$1n/\n    - derive/([aei])n$/$1ng/" },
+    { id: "fuzzy_ong_on", label: "ong = on", line: "derive/ong$/on/" },
+    { id: "fuzzy_l_n", label: "l = n", line: "derive/^l/n/\n    - derive/^n/l/" },
+    { id: "drop_medial_u", label: "省介母 u", line: "derive/([gkzhcs])u([aeo])/$1$2/" },
+    { id: "x_n_v", label: "ju = jv", line: "derive/^([jqxy])u/$1v/" },
+  ];
+
+  const BRIDGE_NODES = [
+    {
+      title: "NODE 01 · 末尾敲 ` 按需触发（rime/lua/ai_filter.lua）",
+      desc: "平时 99% 常规打字完全走 Rime + 雾凇拼音原生 0ms 路线。仅当敲击串以反引号 ` 结尾且至少 1 个字母时，截取前 28 个已上屏汉字上下文，唤醒本地模型接管纠错与重度简拼。",
+      badges: ["平时 0 额外延迟", "28 字符上下文窗口", "反引号 ` 即按需开关"],
+    },
+    {
+      title: "NODE 02 · Winsock2 非阻塞 C 桥接（ime_bridge.dll）",
+      desc: "小狼毫内置 Lua 缺乏原生 Socket 能力且弹出黑框会打断输入。纯 C 编写 Winsock2 客户端，禁用 Nagle 算法（TCP_NODELAY），设置 15ms 非阻塞 connect 与硬超时保护，零黑框卡死风险。",
+      badges: ["Winsock2 DLL", "TCP_NODELAY", "15ms 硬超时保护"],
+    },
+    {
+      title: "NODE 03 · 8105 汉字读音 Trie 硬约束（model/ime_server.py）",
+      desc: "基于 8105 通用字表为 Qwen3 词表建立拼音前缀树，预计算所有合法汉字读音的容错惩罚边（精确 0.0 / 前缀 0.9 / 换序 2.8 / 缺介母 3.0 / 邻键或蹭键 3.2）。结合 DynamicCache 复用前缀 KV 状态。",
+      badges: ["8105 汉字读音约束", "DynamicCache 前缀缓存", "单步 <= 4.5 / 整句 <= 7.0"],
+    },
+    {
+      title: "NODE 04 · 候选首推注入与 0.1ms 无感回落",
+      desc: "服务端返回 Top-K 整句直接注入 Rime 首候选并附带 [AI] 轻标记；即使本地推理服务未启动或超 15ms，C 桥接在 0.1ms 内立即静默回退至雾凇原生候选，绝对不卡键盘。",
+      badges: ["首推注入", "服务未启 0.1ms 回落", "绝不阻塞打字"],
+    },
+  ];
+
+  const BUILTIN_CASES = [
+    {
+      context: "下课了等会儿一起去",
+      raw_keys: "wmxqcf",
+      base_pred: "1. 我们先去吃饭  2. 为什么去采访",
+      user_a_pred: "1. 我明天去吃饭（室友常约次日餐）",
+      user_b_pred: "1. 我马上写代码去食堂（A/B 日常句式差异）",
+      note: "全声母重度简拼 wmxqcf，通用词库几乎无法猜中；微调后直接结合室友日常高频表达排序。",
+    },
+    {
+      context: "晚上回寝室记得",
+      raw_keys: "paoshibnie",
+      base_pred: "1. 跑失别（乱码切分）",
+      user_a_pred: "1. 泡十遍了（蹭键 n/b 纠偏）",
+      user_b_pred: "1. 泡方便面（旁键物理坐标加日常习惯）",
+      note: "出现 b/n 物理邻键顺带蹭键，2D 键距惩罚结合个人习惯把真实意图拉回第 1。",
+    },
+    {
+      context: "导员在群里催",
+      raw_keys: "qiandlkqc",
+      base_pred: "1. 钱多了快去吃  2. 签订了看清楚",
+      user_a_pred: "1. 签到了快起床",
+      user_b_pred: "1. 签到了快去传",
+      note: "同学 A 常打早起签到提醒；同学 B 常交实验报告，相同省键拼写产生完全不同首推。",
+    },
+    {
+      context: "这周进度太慢",
+      raw_keys: "zzenmk",
+      base_pred: "1. 怎么看",
+      user_a_pred: "1. 真怎么快（zh=z + eng=en 双叠加）",
+      user_b_pred: "1. 真正模块（高频写代码术语偏好）",
+      note: "同时叠加平翘舌与前后鼻音习惯偏差，个性化模型不再依赖通用统计平均。",
+    },
+    {
+      context: "先把这个",
+      raw_keys: "gnsxie",
+      base_pred: "1. 概念写  2. 给你写",
+      user_a_pred: "1. 功能实现（软件工程高频词组）",
+      user_b_pred: "1. 观念写下来",
+      note: "跨学科/专业语料注入 LoRA 后，专业高频短语权重显著压过通用生活词汇。",
+    },
+    {
+      context: "明天早上记得",
+      raw_keys: "dmql",
+      base_pred: "1. 打麻去了  2. 点名起了",
+      user_a_pred: "1. 点名起来（寝室互喊早八）",
+      user_b_pred: "1. 导明起了",
+      note: "极短 4 键简拼 dmql 极度依赖个体作息与语境历史分布。",
+    },
+    {
+      context: "这个脚本刚跑",
+      raw_keys: "baoco",
+      base_pred: "1. 保错  2. 抱错",
+      user_a_pred: "1. 报错了（缺 u 声调语癖修正）",
+      user_b_pred: "1. 报酬",
+      note: "漏敲尾键且存在专业语境差异，微调小模型结合上下文精准消歧。",
+    },
+    {
+      context: "刚才发错群了",
+      raw_keys: "chhuai",
+      base_pred: "1. 撤回（未命中完整 chehui）",
+      user_a_pred: "1. 撤回啊（c/ch + e/u 误触修正）",
+      user_b_pred: "1. 出坏了",
+      note: "非标准拼音错拼 chhuai 在 8105 Trie 惩罚预算内完成高频纠偏。",
+    },
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Pure-JS QR Code Encoder (Byte Mode, Version 1-6 Auto, ECC-M)
+  // ---------------------------------------------------------------------------
+  const QR_ALGO = (function () {
     const GF_EXP = new Uint8Array(512);
     const GF_LOG = new Uint8Array(256);
-    {
-      let x = 1;
-      for (let i = 0; i < 255; i += 1) {
-        GF_EXP[i] = x;
-        GF_LOG[x] = i;
-        x <<= 1;
-        if (x & 0x100) x ^= 0x11d;
-      }
-      for (let i = 255; i < 512; i += 1) GF_EXP[i] = GF_EXP[i - 255];
+    let x = 1;
+    for (let i = 0; i < 255; i += 1) {
+      GF_EXP[i] = x;
+      GF_LOG[x] = i;
+      x <<= 1;
+      if (x & 0x100) x ^= 0x11d;
     }
+    for (let i = 255; i < 512; i += 1) GF_EXP[i] = GF_EXP[i - 255];
+
     function gfMul(a, b) {
       if (a === 0 || b === 0) return 0;
       return GF_EXP[GF_LOG[a] + GF_LOG[b]];
     }
-    function rsGeneratorPoly(degree) {
+
+    function rsGenPoly(ecCount) {
       let poly = [1];
-      for (let i = 0; i < degree; i += 1) {
+      for (let i = 0; i < ecCount; i += 1) {
         const next = new Array(poly.length + 1).fill(0);
         const factor = GF_EXP[i];
         for (let j = 0; j < poly.length; j += 1) {
@@ -31,1513 +201,991 @@
       }
       return poly;
     }
-    function rsComputeEc(data, ecCount) {
-      const gen = rsGeneratorPoly(ecCount);
-      const work = new Uint8Array(data.length + ecCount);
-      work.set(data);
+
+    function rsCompute(data, ecCount) {
+      const gen = rsGenPoly(ecCount);
+      const res = new Uint8Array(data.length + ecCount);
+      res.set(data, 0);
       for (let i = 0; i < data.length; i += 1) {
-        const coef = work[i];
+        const coef = res[i];
         if (coef !== 0) {
-          for (let j = 0; j < gen.length; j += 1) work[i + j] ^= gfMul(gen[j], coef);
+          for (let j = 0; j < gen.length; j += 1) {
+            res[i + j] ^= gfMul(gen[j], coef);
+          }
         }
       }
-      return work.slice(data.length);
+      return res.slice(data.length);
     }
-    const VERSIONS_M = [
-      null,
-      { v: 1, size: 21, dataCw: 16, ecPerBlock: 10, blocks: [16], align: [] },
-      { v: 2, size: 25, dataCw: 28, ecPerBlock: 16, blocks: [28], align: [6, 18] },
-      { v: 3, size: 29, dataCw: 44, ecPerBlock: 26, blocks: [44], align: [6, 22] },
-      { v: 4, size: 33, dataCw: 64, ecPerBlock: 18, blocks: [32, 32], align: [6, 26] },
-      { v: 5, size: 37, dataCw: 86, ecPerBlock: 24, blocks: [43, 43], align: [6, 30] },
-      { v: 6, size: 41, dataCw: 108, ecPerBlock: 16, blocks: [27, 27, 27, 27], align: [6, 34] },
-      { v: 7, size: 45, dataCw: 124, ecPerBlock: 18, blocks: [31, 31, 31, 31], align: [6, 22, 38] },
-      { v: 8, size: 49, dataCw: 154, ecPerBlock: 22, blocks: [38, 38, 39, 39], align: [6, 24, 42] },
+
+    const VERSIONS = [
+      { v: 1, totalCodewords: 26, dataCw: 16, ecCw: 10, align: [] },
+      { v: 2, totalCodewords: 44, dataCw: 28, ecCw: 16, align: [6, 18] },
+      { v: 3, totalCodewords: 70, dataCw: 44, ecCw: 26, align: [6, 22] },
+      { v: 4, totalCodewords: 100, dataCw: 64, ecCw: 36, align: [6, 26] },
+      { v: 5, totalCodewords: 134, dataCw: 86, ecCw: 48, align: [6, 30] },
+      { v: 6, totalCodewords: 172, dataCw: 108, ecCw: 64, align: [6, 34] },
     ];
-    function bchFormatInfo(maskId) {
-      const data = maskId & 0x07;
+
+    function bchFormatInfo(mask) {
+      const data = mask & 7; // ECC M = 00
       let rem = data << 10;
-      const poly = 0x537;
-      for (let bit = 14; bit >= 10; bit -= 1) if ((rem >> bit) & 1) rem ^= poly << (bit - 10);
-      return ((data << 10) | rem) ^ 0x5412;
+      const poly = 0b10100110111;
+      for (let bit = 14; bit >= 10; bit -= 1) {
+        if ((rem >> bit) & 1) rem ^= poly << (bit - 10);
+      }
+      return ((data << 10) | rem) ^ 0b101010000010010;
     }
-    function bchVersionInfo(version) {
-      let rem = version << 12;
-      const poly = 0x1f25;
-      for (let bit = 17; bit >= 12; bit -= 1) if ((rem >> bit) & 1) rem ^= poly << (bit - 12);
-      return (version << 12) | rem;
-    }
+
     function encodeBytes(text) {
       const bytes = new TextEncoder().encode(text);
-      let spec = VERSIONS_M[VERSIONS_M.length - 1];
-      for (let v = 1; v < VERSIONS_M.length; v += 1) {
-        if (bytes.length <= VERSIONS_M[v].dataCw - 2) {
-          spec = VERSIONS_M[v];
-          break;
-        }
-      }
-      const payload = bytes.slice(0, spec.dataCw - 2);
+      const ver = VERSIONS.find((v) => v.dataCw >= bytes.length + 2) || VERSIONS[VERSIONS.length - 1];
+      const size = ver.v * 4 + 17;
+
       const bits = [];
-      const pushBits = (val, len) => {
+      function pushBits(val, len) {
         for (let i = len - 1; i >= 0; i -= 1) bits.push((val >> i) & 1);
-      };
+      }
       pushBits(0b0100, 4);
-      pushBits(payload.length, 8);
-      for (let i = 0; i < payload.length; i += 1) pushBits(payload[i], 8);
-      const termLen = Math.min(4, spec.dataCw * 8 - bits.length);
-      for (let i = 0; i < termLen; i += 1) bits.push(0);
+      pushBits(bytes.length, 8);
+      for (let i = 0; i < bytes.length; i += 1) pushBits(bytes[i], 8);
+      pushBits(0, Math.min(4, ver.dataCw * 8 - bits.length));
       while (bits.length % 8 !== 0) bits.push(0);
-      const dataCw = [];
+
+      const cw = [];
       for (let i = 0; i < bits.length; i += 8) {
-        let byte = 0;
-        for (let b = 0; b < 8; b += 1) byte = (byte << 1) | bits[i + b];
-        dataCw.push(byte);
+        let b = 0;
+        for (let j = 0; j < 8; j += 1) b = (b << 1) | bits[i + j];
+        cw.push(b);
       }
-      const padBytes = [0xec, 0x11];
-      let padIdx = 0;
-      while (dataCw.length < spec.dataCw) {
-        dataCw.push(padBytes[padIdx % 2]);
-        padIdx += 1;
+      let pad = 0;
+      while (cw.length < ver.dataCw) {
+        cw.push(pad % 2 === 0 ? 0xec : 0x11);
+        pad += 1;
       }
-      const dataBlocks = [];
-      const ecBlocks = [];
-      let offset = 0;
-      for (const blkLen of spec.blocks) {
-        const chunk = dataCw.slice(offset, offset + blkLen);
-        offset += blkLen;
-        dataBlocks.push(chunk);
-        ecBlocks.push(rsComputeEc(chunk, spec.ecPerBlock));
+
+      const blocks = ver.v >= 5 ? 2 : 1;
+      const bLen = Math.floor(ver.dataCw / blocks);
+      const ecPer = Math.floor(ver.ecCw / blocks);
+      const allData = [];
+      const allEc = [];
+      for (let i = 0; i < blocks; i += 1) {
+        const part = Uint8Array.from(cw.slice(i * bLen, (i + 1) * bLen));
+        allData.push(part);
+        allEc.push(rsCompute(part, ecPer));
       }
-      const finalCw = [];
-      const maxBlockLen = Math.max(...spec.blocks);
-      for (let i = 0; i < maxBlockLen; i += 1) {
-        for (const blk of dataBlocks) if (i < blk.length) finalCw.push(blk[i]);
+      const stream = [];
+      for (let c = 0; c < bLen; c += 1) {
+        for (let b = 0; b < blocks; b += 1) stream.push(allData[b][c]);
       }
-      for (let i = 0; i < spec.ecPerBlock; i += 1) {
-        for (const ecBlk of ecBlocks) finalCw.push(ecBlk[i]);
+      for (let c = 0; c < ecPer; c += 1) {
+        for (let b = 0; b < blocks; b += 1) stream.push(allEc[b][c]);
       }
-      const size = spec.size;
+
       const grid = Array.from({ length: size }, () => new Int8Array(size).fill(-1));
       const reserved = Array.from({ length: size }, () => new Uint8Array(size));
-      const setMod = (r, c, val, isFunc) => {
-        grid[r][c] = val ? 1 : 0;
-        if (isFunc) reserved[r][c] = 1;
-      };
-      const drawFinder = (r0, c0) => {
+
+      function setFinder(r0, c0) {
         for (let dr = -1; dr <= 7; dr += 1) {
           for (let dc = -1; dc <= 7; dc += 1) {
             const r = r0 + dr;
             const c = c0 + dc;
             if (r < 0 || r >= size || c < 0 || c >= size) continue;
-            const inOuter = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6;
+            reserved[r][c] = 1;
+            const inBox = dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6;
             const onBorder = dr === 0 || dr === 6 || dc === 0 || dc === 6;
-            const inCore = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
-            setMod(r, c, inOuter && (onBorder || inCore), true);
-          }
-        }
-      };
-      drawFinder(0, 0);
-      drawFinder(0, size - 7);
-      drawFinder(size - 7, 0);
-      for (const cr of spec.align) {
-        for (const cc of spec.align) {
-          if (reserved[cr][cc]) continue;
-          for (let dr = -2; dr <= 2; dr += 1) {
-            for (let dc = -2; dc <= 2; dc += 1) {
-              const onEdge = Math.abs(dr) === 2 || Math.abs(dc) === 2;
-              setMod(cr + dr, cc + dc, onEdge || (dr === 0 && dc === 0), true);
-            }
+            const onCore = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
+            grid[r][c] = inBox && (onBorder || onCore) ? 1 : 0;
           }
         }
       }
+
+      setFinder(0, 0);
+      setFinder(0, size - 7);
+      setFinder(size - 7, 0);
+
       for (let i = 8; i < size - 8; i += 1) {
-        if (!reserved[6][i]) setMod(6, i, i % 2 === 0, true);
-        if (!reserved[i][6]) setMod(i, 6, i % 2 === 0, true);
+        reserved[6][i] = 1;
+        grid[6][i] = i % 2 === 0 ? 1 : 0;
+        reserved[i][6] = 1;
+        grid[i][6] = i % 2 === 0 ? 1 : 0;
       }
-      setMod(size - 8, 8, 1, true);
-      for (let i = 0; i < 9; i += 1) {
-        if (!reserved[8][i]) reserved[8][i] = 1;
-        if (!reserved[i][8]) reserved[i][8] = 1;
-      }
-      for (let i = 0; i < 8; i += 1) {
-        reserved[8][size - 1 - i] = 1;
-        reserved[size - 1 - i][8] = 1;
-      }
-      if (spec.v >= 7) {
-        const verBits = bchVersionInfo(spec.v);
-        for (let i = 0; i < 18; i += 1) {
-          const bit = (verBits >> i) & 1;
-          const r = Math.floor(i / 3);
-          const c = size - 11 + (i % 3);
-          setMod(r, c, bit, true);
-          setMod(c, r, bit, true);
+
+      if (ver.align.length >= 2) {
+        const cPos = ver.align[1];
+        for (let dr = -2; dr <= 2; dr += 1) {
+          for (let dc = -2; dc <= 2; dc += 1) {
+            const r = cPos + dr;
+            const c = cPos + dc;
+            reserved[r][c] = 1;
+            grid[r][c] = Math.abs(dr) === 2 || Math.abs(dc) === 2 || (dr === 0 && dc === 0) ? 1 : 0;
+          }
         }
       }
-      const streamBits = [];
-      for (const cw of finalCw) for (let b = 7; b >= 0; b -= 1) streamBits.push((cw >> b) & 1);
+
+      reserved[4 * ver.v + 9][8] = 1;
+      grid[4 * ver.v + 9][8] = 1;
+
+      for (let i = 0; i <= 8; i += 1) {
+        if (i !== 6) {
+          reserved[8][i] = 1;
+          reserved[i][8] = 1;
+        }
+      }
+      for (let i = size - 8; i < size; i += 1) reserved[8][i] = 1;
+      for (let i = size - 7; i < size; i += 1) reserved[i][8] = 1;
+
       let bitIdx = 0;
-      let dir = -1;
+      let up = true;
       for (let col = size - 1; col > 0; col -= 2) {
         if (col === 6) col -= 1;
-        for (let step = 0; step < size; step += 1) {
-          const row = dir === -1 ? size - 1 - step : step;
-          for (let dx = 0; dx < 2; dx += 1) {
-            const c = col - dx;
-            if (!reserved[row][c]) {
-              grid[row][c] = bitIdx < streamBits.length ? streamBits[bitIdx] : 0;
-              bitIdx += 1;
-            }
+        for (let i = 0; i < size; i += 1) {
+          const r = up ? size - 1 - i : i;
+          for (let dc = 0; dc < 2; dc += 1) {
+            const c = col - dc;
+            if (reserved[r][c]) continue;
+            const byteIdx = bitIdx >> 3;
+            const bit = byteIdx < stream.length ? (stream[byteIdx] >> (7 - (bitIdx & 7))) & 1 : 0;
+            bitIdx += 1;
+            const mask = (r + c) % 2 === 0 ? 1 : 0;
+            grid[r][c] = bit ^ mask;
           }
         }
-        dir = -dir;
+        up = !up;
       }
-      const maskFns = [
-        (r, c) => (r + c) % 2 === 0,
-        (r) => r % 2 === 0,
-        (_r, c) => c % 3 === 0,
-        (r, c) => (r + c) % 3 === 0,
-        (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
-        (r, c) => ((r * c) % 2) + ((r * c) % 3) === 0,
-        (r, c) => (((r * c) % 2) + ((r * c) % 3)) % 2 === 0,
-        (r, c) => (((r + c) % 2) + ((r * c) % 3)) % 2 === 0,
-      ];
-      function applyFormat(mat, maskId) {
-        const fmt = bchFormatInfo(maskId);
-        for (let i = 0; i < 15; i += 1) {
-          const bit = (fmt >> i) & 1;
-          if (i < 6) mat[i][8] = bit;
-          else if (i < 8) mat[i + 1][8] = bit;
-          else if (i === 8) mat[8][7] = bit;
-          else mat[8][14 - i] = bit;
-          if (i < 8) mat[8][size - 1 - i] = bit;
-          else mat[size - 15 + i][8] = bit;
-        }
+
+      const fmt = bchFormatInfo(0);
+      for (let i = 0; i < 15; i += 1) {
+        const bit = (fmt >> i) & 1;
+        if (i < 6) grid[i][8] = bit;
+        else if (i < 8) grid[i + 1][8] = bit;
+        else grid[size - 15 + i][8] = bit;
+
+        if (i < 8) grid[8][size - 1 - i] = bit;
+        else if (i < 9) grid[8][7] = bit;
+        else grid[8][14 - i] = bit;
       }
-      function calcPenalty(mat) {
-        let score = 0;
-        for (let r = 0; r < size; r += 1) {
-          let run = 1;
-          for (let c = 1; c < size; c += 1) {
-            if (mat[r][c] === mat[r][c - 1]) {
-              run += 1;
-              if (run === 5) score += 3;
-              else if (run > 5) score += 1;
-            } else run = 1;
-          }
-        }
-        for (let c = 0; c < size; c += 1) {
-          let run = 1;
-          for (let r = 1; r < size; r += 1) {
-            if (mat[r][c] === mat[r - 1][c]) {
-              run += 1;
-              if (run === 5) score += 3;
-              else if (run > 5) score += 1;
-            } else run = 1;
-          }
-        }
-        for (let r = 0; r < size - 1; r += 1) {
-          for (let c = 0; c < size - 1; c += 1) {
-            const v = mat[r][c];
-            if (v === mat[r][c + 1] && v === mat[r + 1][c] && v === mat[r + 1][c + 1]) score += 3;
-          }
-        }
-        return score;
-      }
-      let bestMat = null;
-      let bestPenalty = Infinity;
-      for (let m = 0; m < 8; m += 1) {
-        const mat = grid.map((row) => Int8Array.from(row));
-        const fn = maskFns[m];
-        for (let r = 0; r < size; r += 1) {
-          for (let c = 0; c < size; c += 1) {
-            if (!reserved[r][c] && fn(r, c)) mat[r][c] ^= 1;
-          }
-        }
-        applyFormat(mat, m);
-        const pen = calcPenalty(mat);
-        if (pen < bestPenalty) {
-          bestPenalty = pen;
-          bestMat = mat;
-        }
-      }
-      return bestMat;
+
+      return grid;
     }
-    function createSvg(text) {
-      const mat = encodeBytes(text);
-      const size = mat.length;
-      const quiet = 4;
-      const full = size + quiet * 2;
-      const ns = "http://www.w3.org/2000/svg";
-      const svg = document.createElementNS(ns, "svg");
-      svg.setAttribute("viewBox", `0 0 ${full} ${full}`);
-      svg.setAttribute("role", "img");
-      svg.setAttribute("aria-label", `扫码进入 ${text}`);
-      svg.setAttribute("shape-rendering", "crispEdges");
-      const bg = document.createElementNS(ns, "rect");
-      bg.setAttribute("width", String(full));
-      bg.setAttribute("height", String(full));
-      bg.setAttribute("fill", "#ffffff");
-      svg.appendChild(bg);
-      let pathData = "";
-      for (let r = 0; r < size; r += 1) {
-        for (let c = 0; c < size; c += 1) {
-          if (mat[r][c] === 1) pathData += `M${c + quiet},${r + quiet}h1v1h-1z`;
+
+    function toSvg(text) {
+      const m = encodeBytes(text);
+      const n = m.length;
+      const q = 4;
+      const total = n + q * 2;
+      let paths = "";
+      for (let r = 0; r < n; r += 1) {
+        for (let c = 0; c < n; c += 1) {
+          if (m[r][c] === 1) paths += `<rect x="${c + q}" y="${r + q}" width="1" height="1" />`;
         }
       }
-      const path = document.createElementNS(ns, "path");
-      path.setAttribute("d", pathData);
-      path.setAttribute("fill", "#18181b");
-      svg.appendChild(path);
-      return svg;
+      return `<svg viewBox="0 0 ${total} ${total}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><rect width="${total}" height="${total}" fill="#ffffff"/><g fill="#141820">${paths}</g></svg>`;
     }
-    return { createSvg };
+
+    return { toSvg };
   })();
 
-  const WX_STEP_DATA = [
-    {
-      badge: "第 1 次打自造句（效果不如意）",
-      keys: "qian'd'l'kuai'q'c",
-      cands: ["1 钱多了快去吃", "2 钱到了快去吃", "3 前端", "4 签到"],
-      top1Miss: true,
-      note: "即使敲出完整 kuai，通用统计依然优先给出「钱多了快去吃」。",
-    },
-    {
-      badge: "纠正上屏一次后，第 2 次打省掉 kuai -> k",
-      keys: "qian'd'l'k'q'c",
-      cands: ["1 签到了快起床", "2 签订了看清楚", "3 签到了", "4 前端"],
-      top1Miss: false,
-      note: "第二次打即使省成单字母 k，也能结合上下文直接记住「签到了快起床」。",
-    },
-  ];
-
-  const WETYPE_STAGES = [
-    {
-      title: "STEP 01 · 残缺 / 吞键按键流与 2D 物理坐标采集",
-      desc: "输入流往往存在吞键、平翘舌混淆或高速换序，系统同时记录每个键的 2D QWERTY 坐标偏移与按键间隔。",
-      cards: [
-        { cls: "", head: "xiag", body: "吞键漏打：高速连打漏掉后鼻音 n" },
-        { cls: "", head: "senm / qian'd'l'k'q'c", body: "平翘舌混淆 / 尾音截断与重度简拼" },
-        { cls: "", head: "niaho", body: "高速连打：左右手相邻键时序换序" },
-      ],
-    },
-    {
-      title: "STEP 02 · 模糊拼音格（Fuzzy Lattice）联合容错搜索",
-      desc: "不做死板的硬音节切分，而是边扫按键边在 WFST / 容错 Trie 上并行展开多个候选路径。",
-      cards: [
-        { cls: "is-good", head: "路径 A：xiag -> xiang", body: "补 n · 对应 想 / 项 / 像（上下文强匹配，保留）" },
-        { cls: "is-bad", head: "路径 B：xiag -> xia + g", body: "强行割裂：下个 / 夏哥（语义极低，被 Beam Search 剪枝）" },
-        { cls: "", head: "路径 C：邻键 g -> f / h", body: "2D 键距加权替换，在容错 Trie 上保留 Top-K 路径" },
-      ],
-    },
-    {
-      title: "STEP 03 · 多级语言模型打分与「空间换时间」重排",
-      desc: "用三级流水线平衡响应速度与长句命中率——这也正是商业输入法内存重、难定制、有联网顾虑的根源。",
-      cards: [
-        { cls: "", head: "L1 本地极速词典 (< 5ms)", body: "庞大静态通用词库 + 热词缓存，靠「空间换时间」命中约 80% 常规输入" },
-        { cls: "", head: "L2 端侧轻量神经模型 (10~30ms)", body: "几十 MB 量化 RNN / Transformer，结合上下文做 Top-K 重排" },
-        { cls: "is-warn", head: "L3 云端大模型补强 (异步联网)", body: "重度错拼或长句简拼时，异步上传上下文至云端拉取联想候选" },
-      ],
-    },
-    {
-      title: "STEP 04 · 候选重排输出与三大局限反思",
-      desc: "只要语言模型概率足够高，就能抵消拼写惩罚把「想吃什么」顶到第一；但对个人来说依然存在三大局限：",
-      cards: [
-        { cls: "is-bad", head: "1. 隐私高度敏感", body: "L3 云端上下文联想与遥测存在数据出境与泄露顾虑" },
-        { cls: "is-warn", head: "2. 呆板空间换时间", body: "庞大静态通用词库面向平均人，无法按个人习惯精细裁剪" },
-        { cls: "", head: "3. 深度定制化低", body: "无法显式查看个人声韵母分布，也不能用专属语料本地训练小模型" },
-      ],
-    },
-  ];
-
-  const BRIDGE_NODES = [
-    {
-      title: "NODE 01 · 小狼毫 Lua 拦截器（rime/lua/ai_filter.lua）",
-      desc: "平时打字 0ms 零阻塞，完全由雾凇拼音原生出词；只有当你在输入末尾刻意敲入单引号 '（例如 yixa' / wmxqcf'）时，才截取最近 28 字上文触发本地 AI。",
-      tags: ["平时 0ms 零延迟", "单引号 ' 按需触发", "60s 跨场景自动清空上文"],
-    },
-    {
-      title: "NODE 02 · C 桥接动态库（rime/bridge/ime_bridge.c）",
-      desc: "Lua 原生不支持无黑框 TCP；我们用 Winsock2 手写极简 C DLL，设置非阻塞 15ms 连接超时与 TCP_NODELAY，直接与 127.0.0.1:18765 亚毫秒通信。",
-      tags: ["gcc -shared 编译", "15ms 非阻塞超时", "TCP_NODELAY 零黑框"],
-    },
-    {
-      title: "NODE 03 · 拼音 Trie 容错 Beam Search（model/ime_server.py）",
-      desc: "用 8105 通用字表读音将 Qwen3 词表建为拼音 Trie，并预生成变体惩罚：精确 0.0 / 前缀缩写 0.9 / 换序 2.8 / 缺介母 3.0 / 邻键或蹭键 3.2。配合 DynamicCache 复用前缀 KV。",
-      tags: ["8105 汉字读音 Trie", "单步代价 <= 4.5", "整句惩罚 <= 7.0"],
-    },
-    {
-      title: "NODE 04 · 候选置顶与零副作用兜底",
-      desc: "AI 返回的 Top-1 / Top-2 带 [AI] 标注置顶，同时保留雾凇原生候选并自动去重；若本地 GPU 推理服务未启动，0.1ms 直接静默透传原生候选。",
-      tags: ["[AI] Top-1/2 置顶", "去重保留雾凇候选", "服务未启 0.1ms 回落"],
-    },
-  ];
-
-  const RULE_COMPILER_DEMOS = [
-    {
-      id: "ong=on",
-      alias: "on=ong -> ong=on",
-      example: "wuson -> 雾凇",
-      desc: "允许将后鼻音 ong 简写为 on，贴合快速敲击时省去末尾 g 的高频习惯，不影响原本 on 词条。",
-      algebra: ["derive/ong$/on/"],
-    },
-    {
-      id: "l=r",
-      alias: "r=l -> l=r",
-      example: "len -> ren (认真)",
-      desc: "声母 l 与 r 双向模糊派生，适配部分方言混用或高速盲打时的声母漂移。",
-      algebra: ["derive/^l/r/", "derive/^r/l/"],
-    },
-    {
-      id: "z=zh",
-      alias: "zh=z -> z=zh",
-      example: "zao -> zhao",
-      desc: "平翘舌声母双向互通；类似地 c=ch、s=sh 采用负向先行断言 ([^h]) 避免二次重复匹配。",
-      algebra: ["derive/^zh/z/", "derive/^z([^h])/zh$1/"],
-    },
-    {
-      id: "ju=jv",
-      alias: "u=v -> ju=jv",
-      example: "qv -> qu",
-      desc: "兼容部分双拼/习惯把 j/q/x/y 后的 u 敲作 v 的拼写差异。",
-      algebra: ["derive/^([jqxy])u/$1v/", "derive/^([jqxy])v/$1u/"],
-    },
-    {
-      id: "zh=hz",
-      alias: "hz=zh -> zh=hz",
-      example: "hzi -> zhi",
-      desc: "纠正高速敲击时声母 zh/ch/sh 与紧随元音间的左右手时序倒置。",
-      algebra: [
-        "derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/",
-        "derive/([zcs])h([aeiu])$/$1$2h/",
-      ],
-    },
-    {
-      id: "an=na",
-      alias: "na=an -> an=na",
-      example: "dna -> dan",
-      desc: "针对连打时末尾 an 误抢按成 na 的邻键时序换序，限定声母前置避免误伤正常 na 音节。",
-      algebra: ["derive/([wrtypsdfghklzcbnm])an$/$1na/"],
-    },
-  ];
-
-  const NOISE_SIM_DEMOS = [
-    {
-      label: "我明天去吃饭",
-      steps: [
-        "目标汉字: 我 明天 去 吃饭",
-        "标准拼音: wo | ming tian | qu | chi fan",
-        "词级策略: jieba 分词后按纯首字母/前重后轻采样 -> w m t q c f",
-        "最终输入: <w m t q c f>  (或省略后鼻尾 wmxqcf)",
-      ],
-    },
-    {
-      label: "跑识别 (蹭键)",
-      steps: [
-        "目标汉字: 跑 识别",
-        "标准拼音: pao | shi bie",
-        "物理蹭键: 连打带入邻键 n -> bie + n = bnie",
-        "最终输入: <p a o s h i b n i e>  (real_eval win_seq9)",
-      ],
-    },
-    {
-      label: "我是 (邻键)",
-      steps: [
-        "目标汉字: 我 是",
-        "标准拼音: wo | shi",
-        "二维坐标: o=(8,0), i=(7,0), dist=1.0 -> 最高邻键采样权重",
-        "最终输入: <w i s h i>  (real_eval android_seq15)",
-      ],
-    },
-    {
-      label: "过几天 (截断)",
-      steps: [
-        "目标汉字: 过 几天",
-        "标准拼音: guo | ji tian",
-        "发音截断: tian 截断为 t (前重后轻词尾衰减)",
-        "最终输入: <g u o j i t>  (real_eval win_seq48)",
-      ],
-    },
-  ];
-
-  const BUILTIN_COMPARE_CASES = [
-    {
-      context: "快到饭点了，",
-      raw_keys: "wmxqcf",
-      base_pred: ["我们去吃饭", "外卖小哥", "问明天出发"],
-      user_a_pred: ["我明天去吃饭", "我们下去吃饭", "我先去吃饭"],
-      user_b_pred: ["我们下楼吃饭", "外卖先点炒粉", "我们一起吃饭"],
-      note: "6 位声母简拼下，通用底座偏向高频常规词；本人模型优先召回校园约饭常用句式，室友模型倾向点外卖/下楼场景。",
-    },
-    {
-      context: "下周数据结构实验",
-      raw_keys: "daimazhon",
-      base_pred: ["代码肿", "大妈众", "代马中"],
-      user_a_pred: ["代码中", "代码重", "代码终端"],
-      user_b_pred: ["代码总", "代码种", "大马中"],
-      note: "本人高频省去后鼻音尾键 g（zhon -> zhong），本人模型结合「实验」上下文将「代码中」排在首位。",
-    },
-    {
-      context: "今天高数老师",
-      raw_keys: "lenzhen",
-      base_pred: ["冷战", "勒紧", "论战"],
-      user_a_pred: ["愣着", "人真", "冷着"],
-      user_b_pred: ["认真", "认准", "人正"],
-      note: "室友存在典型 l/r 声母混敲习惯（ren -> len），室友专属模型在老师语境下直接恢复「认真」。",
-    },
-    {
-      context: "晚上回寝室",
-      raw_keys: "dazan",
-      base_pred: ["打算", "打砸", "大赞"],
-      user_a_pred: ["打代码", "大早上", "打战"],
-      user_b_pred: ["打游戏", "打赞", "大招"],
-      note: "面对邻键蹭错或韵母偏差，不同用户长期词频偏置决定了候选词的上下文排序倾向。",
-    },
-    {
-      context: "刚把模型权重",
-      raw_keys: "bsaobcun",
-      base_pred: ["不扫不出", "白手不存", "帮我保存"],
-      user_a_pred: ["保存", "报错", "保错"],
-      user_b_pred: ["不保存", "包存", "报错"],
-      note: "高速敲击出现连击多键（bao -> bsao）与换序，拼音 Trie 邻键容错结合开发语境恢复「保存」。",
-    },
-    {
-      context: "顺手把空调",
-      raw_keys: "gugandiao",
-      base_pred: ["孤单掉", "骨干掉", "古怪掉"],
-      user_a_pred: ["关掉", "改掉", "关了"],
-      user_b_pred: ["关掉", "挂掉", "关上"],
-      note: "机械连击或重复起手键（guan -> gugan）场景，本地 LoRA 结合动作宾语「空调」准确收敛到「关掉」。",
-    },
-    {
-      context: "去图书馆",
-      raw_keys: "zixisi",
-      base_pred: ["自私", "仔细思", "子嗣"],
-      user_a_pred: ["自习室", "自习", "仔细"],
-      user_b_pred: ["自习室", "找位置", "自私"],
-      note: "平翘舌混淆（shi -> si）下，通用底座易落入非语境同音词，个性化模型结合校园地点稳稳命中「自习室」。",
-    },
-    {
-      context: "明天早上",
-      raw_keys: "bnaqu",
-      base_pred: ["帮那去", "搬去", "把那去"],
-      user_a_pred: ["班区", "办去", "早八去"],
-      user_b_pred: ["搬去", "不去", "帮拿去"],
-      note: "典型 an/na 邻键时序倒置（ban -> bna），经过各自错误分布微调后均能跳过错序直接还原意图。",
-    },
-  ];
-
-  const TOTAL_SLIDES = 9;
-  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页自动呼出右侧榜单
-  const POLL_INTERVAL_MS = 2000;
-  const WALL_ROTATE_MS = 4500;
-
+  // ---------------------------------------------------------------------------
+  // State & DOM Refs
+  // ---------------------------------------------------------------------------
   const state = {
     currentSlide: 0,
     sidebarVisible: false,
-    sidebarManualOverride: false,
-    totalCount: 0,
-    leaderboard: [],
-    recentComments: [],
-    spotlightIndex: 0,
-    wallPaused: false,
-    wxStepIdx: 0,
-    wtStageIdx: 0,
-    bridgeStageIdx: 0,
-    bpeShowGood: false,
-    activeRuleDemoIdx: 0,
-    activeSimDemoIdx: 0,
-    compareCases: BUILTIN_COMPARE_CASES,
-    compareSourceLabel: "内置实证案例 (8 组)",
-    currentCaseIndex: 0,
-    revealStep: 1, // 第 9 页初始只显示通用底座，点击或按 Space 逐步揭晓本人与室友模型
+    selectedRules: new Set(["fuzzy_z_zh", "fuzzy_eng_en", "fuzzy_ong_on"]),
+    wtStage: 2,
+    bridgeNode: 0,
+    bpeSingleChar: false,
+    kbMode: "adjacent",
+    kbTarget: "g",
+    cases: BUILTIN_CASES.slice(),
+    caseIdx: 0,
+    revealStep: 1,
+    knownRanks: new Map(),
+    pollTimer: null,
+    wxReplayTimer: null,
   };
 
-  const el = {
-    stageShell: document.getElementById("stage-shell"),
-    stageRight: document.getElementById("stage-right"),
-    hudChapterName: document.getElementById("hud-chapter-name"),
-    revealAllBtn: document.getElementById("reveal-all-btn"),
-    toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
-    slideCards: Array.from(document.querySelectorAll(".slide-card")),
+  const dom = {
+    shell: document.getElementById("stage-shell"),
+    main: document.getElementById("stage-main"),
+    stage: document.getElementById("deck-stage"),
+    slides: Array.from(document.querySelectorAll(".slide")),
+    hudChapter: document.getElementById("hud-chapter-name"),
     slideCounter: document.getElementById("slide-counter"),
-    slideDots: document.getElementById("slide-dots"),
     prevSlideBtn: document.getElementById("prev-slide-btn"),
     nextSlideBtn: document.getElementById("next-slide-btn"),
+    revealAllBtn: document.getElementById("reveal-all-btn"),
+    toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
-
-    wxDemo1Keys: document.getElementById("wx-demo1-keys"),
-    replayWx1Btn: document.getElementById("replay-wx1-btn"),
-    wxStepTabs: Array.from(document.querySelectorAll(".wx-step-tab")),
-    wxStepDisplay: document.getElementById("wx-step-display"),
-
-    wtNodes: Array.from(document.querySelectorAll("#wt-stage-bar .wt-node")),
-    wtDetailStage: document.getElementById("wt-detail-stage"),
-
-    ruleDemoTabs: document.getElementById("rule-demo-tabs"),
-    compilerRuleId: document.getElementById("compiler-rule-id"),
-    compilerAlias: document.getElementById("compiler-alias"),
-    compilerExample: document.getElementById("compiler-example"),
-    compilerDesc: document.getElementById("compiler-desc"),
-    compilerYaml: document.getElementById("compiler-yaml"),
-
-    wallTotalCount: document.getElementById("wall-total-count"),
-    wallToggleBtn: document.getElementById("wall-toggle-btn"),
-    wallNextBtn: document.getElementById("wall-next-btn"),
-    wallCarouselIndex: document.getElementById("wall-carousel-index"),
-    spotlightBox: document.getElementById("spotlight-box"),
-    recentFeedList: document.getElementById("recent-feed-list"),
-
-    hystSlider: document.getElementById("hyst-slider"),
-    hystRateVal: document.getElementById("hyst-rate-val"),
-    hystStateBadge: document.getElementById("hyst-state-badge"),
-    hystSimOutput: document.getElementById("hyst-sim-output"),
-    hystPresetBtns: Array.from(document.querySelectorAll("[data-rate]")),
-    svgNodeOff: document.getElementById("svg-node-off"),
-    svgNodeMid: document.getElementById("svg-node-mid"),
-    svgNodeOn: document.getElementById("svg-node-on"),
-
-    simTabs: document.getElementById("sim-tabs"),
-    simPipelineView: document.getElementById("sim-pipeline-view"),
-    bpeToggleBtn: document.getElementById("bpe-toggle-btn"),
-    bpeModeBad: document.getElementById("bpe-mode-bad"),
-    bpeModeGood: document.getElementById("bpe-mode-good"),
-
-    bridgeNodes: Array.from(document.querySelectorAll("#bridge-node-bar .wt-node")),
-    bridgeDetailBox: document.getElementById("bridge-detail-box"),
-
-    casesSourceBadge: document.getElementById("cases-source-badge"),
-    casesFileInput: document.getElementById("cases-file-input"),
-    revealModelsBtn: document.getElementById("reveal-models-btn"),
-    caseSelector: document.getElementById("case-selector"),
-    caseContext: document.getElementById("case-context"),
-    caseRawKeys: document.getElementById("case-raw-keys"),
-    caseBasePred: document.getElementById("case-base-pred"),
-    caseUserAPred: document.getElementById("case-user-a-pred"),
-    caseUserBPred: document.getElementById("case-user-b-pred"),
-    colBase: document.getElementById("col-base"),
-    colUserA: document.getElementById("col-user-a"),
-    colUserB: document.getElementById("col-user-b"),
-    caseNote: document.getElementById("case-note"),
-    prevCaseBtn: document.getElementById("prev-case-btn"),
-    nextCaseBtn: document.getElementById("next-case-btn"),
-
-    qrWrap: document.getElementById("qr-canvas-wrap"),
-    playUrlLink: document.getElementById("play-url-link"),
-    copyPlayUrlBtn: document.getElementById("copy-play-url-btn"),
-    copyUrlFeedback: document.getElementById("copy-url-feedback"),
-    lbLiveStatus: document.getElementById("lb-live-status"),
-    lbTotalBadge: document.getElementById("lb-total-badge"),
-    leaderboardList: document.getElementById("leaderboard-list"),
-
-    resetTriggerBtn: document.getElementById("reset-trigger-btn"),
+    sidebar: document.getElementById("stage-right"),
+    qrContainer: document.getElementById("qr-container"),
+    playUrlText: document.getElementById("play-url-text"),
+    copyUrlBtn: document.getElementById("copy-url-btn"),
+    copyFeedback: document.getElementById("copy-url-feedback"),
+    pollBadge: document.getElementById("poll-status-badge"),
+    countBadge: document.getElementById("player-count-badge"),
+    commentsBar: document.getElementById("recent-comments-bar"),
+    commentsTrack: document.getElementById("recent-comments-track"),
+    boardEmpty: document.getElementById("leaderboard-empty"),
+    boardList: document.getElementById("leaderboard-list"),
+    livePlayers: document.getElementById("live-total-players"),
+    liveTopScore: document.getElementById("live-top-score"),
+    liveTopRule: document.getElementById("live-top-rule"),
+    openResetBtn: document.getElementById("open-reset-btn"),
     resetModal: document.getElementById("reset-modal"),
-    resetCloseBtn: document.getElementById("reset-close-btn"),
-    resetCancelBtn: document.getElementById("reset-cancel-btn"),
+    closeResetBtn: document.getElementById("close-reset-btn"),
+    cancelResetBtn: document.getElementById("cancel-reset-btn"),
     resetForm: document.getElementById("reset-form"),
-    resetTokenInput: document.getElementById("reset-token-input"),
-    resetFeedback: document.getElementById("reset-feedback"),
+    adminTokenInput: document.getElementById("admin-token-input"),
+    resetErrorMsg: document.getElementById("reset-error-msg"),
   };
 
+  // ---------------------------------------------------------------------------
+  // Fixed 1920x1080 Uniform Stage Scaling
+  // ---------------------------------------------------------------------------
+  function rescaleDeckStage() {
+    const rect = dom.main.getBoundingClientRect();
+    const availW = Math.max(320, rect.width);
+    const availH = Math.max(240, rect.height);
+    const scale = Math.min(availW / STAGE_WIDTH, availH / STAGE_HEIGHT);
+    const offsetX = (availW - STAGE_WIDTH * scale) / 2;
+    const offsetY = (availH - STAGE_HEIGHT * scale) / 2;
+    dom.stage.style.transform = `translate3d(${offsetX.toFixed(2)}px, ${offsetY.toFixed(2)}px, 0) scale(${scale.toFixed(5)})`;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sidebar Visibility & Slide Navigation
+  // ---------------------------------------------------------------------------
   function setSidebarVisible(visible) {
     state.sidebarVisible = Boolean(visible);
-    el.stageRight.hidden = !state.sidebarVisible;
-    el.stageShell.classList.toggle("is-sidebar-hidden", !state.sidebarVisible);
-    el.toggleSidebarBtn.classList.toggle("is-active", state.sidebarVisible);
-    el.toggleSidebarBtn.textContent = state.sidebarVisible ? "隐藏榜单" : "显示榜单";
+    dom.sidebar.hidden = !state.sidebarVisible;
+    dom.shell.classList.toggle("is-sidebar-hidden", !state.sidebarVisible);
+    dom.toggleSidebarBtn.textContent = state.sidebarVisible ? "隐藏榜单" : "显示榜单";
+    requestAnimationFrame(rescaleDeckStage);
   }
 
-  function resolvePlayUrl() {
-    const origin = window.location.origin;
-    if (!origin || origin === "null" || window.location.protocol === "file:") {
-      return "http://127.0.0.1:8000/play";
-    }
-    return `${origin}/play`;
+  function renderInlineDots() {
+    document.querySelectorAll("[data-dots]").forEach((holder) => {
+      holder.innerHTML = "";
+      dom.slides.forEach((slide, idx) => {
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.className = "p-dot" + (idx === state.currentSlide ? " is-active" : "");
+        dot.title = slide.dataset.title || `第 ${idx + 1} 页`;
+        dot.addEventListener("click", () => goToSlide(idx));
+        holder.appendChild(dot);
+      });
+    });
   }
 
-  function renderQrCode() {
-    const playUrl = resolvePlayUrl();
-    el.qrWrap.innerHTML = "";
-    el.qrWrap.appendChild(QREncoder.createSvg(playUrl));
-    el.playUrlLink.href = playUrl;
-    el.playUrlLink.textContent = playUrl;
-  }
+  function goToSlide(targetIdx) {
+    const idx = Math.max(0, Math.min(dom.slides.length - 1, targetIdx));
+    const goingBack = idx < state.currentSlide;
+    state.currentSlide = idx;
 
-  function buildRuleChip(ruleText, accent = false) {
-    const chip = document.createElement("span");
-    chip.className = `rule-chip${accent ? " is-accent" : ""}`;
-    chip.textContent = String(ruleText);
-    return chip;
-  }
-
-  function formatShortTime(isoStr) {
-    if (!isoStr) return "";
-    const date = new Date(isoStr);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  }
-
-  // ---- Progressive Reveal Engine (click veiled cards or press Space) ----
-  function revealElement(node) {
-    if (!node || !node.classList.contains("is-veiled")) return false;
-    node.classList.remove("is-veiled");
-    node.classList.add("is-revealed");
-    return true;
-  }
-
-  function revealNextInCurrentSlide() {
-    const card = el.slideCards[state.currentSlide];
-    if (!card) return;
-
-    // 1. Check veiled blocks
-    const nextVeiled = card.querySelector(".is-veiled");
-    if (nextVeiled) {
-      revealElement(nextVeiled);
-      return;
-    }
-    // 2. Slide 2 or Slide 8 stage steps
-    if (state.currentSlide === 1 && state.wtStageIdx < WETYPE_STAGES.length - 1) {
-      state.wtStageIdx += 1;
-      renderWtStage();
-      return;
-    }
-    if (state.currentSlide === 7 && state.bridgeStageIdx < BRIDGE_NODES.length - 1) {
-      state.bridgeStageIdx += 1;
-      renderBridgeStage();
-      return;
-    }
-    // 3. Slide 9 concealed models
-    if (state.currentSlide === 8 && state.revealStep < 3) {
-      state.revealStep += 1;
-      applyRevealState();
-    }
-  }
-
-  function revealAllInCurrentSlide() {
-    const card = el.slideCards[state.currentSlide];
-    if (!card) return;
-    card.querySelectorAll(".is-veiled").forEach((node) => revealElement(node));
-    if (state.currentSlide === 8) {
-      state.revealStep = 3;
-      applyRevealState();
-    }
-  }
-
-  function renderSlideDots() {
-    el.slideDots.innerHTML = "";
-    for (let i = 0; i < TOTAL_SLIDES; i += 1) {
-      const dot = document.createElement("button");
-      dot.type = "button";
-      dot.className = `slide-dot${i === state.currentSlide ? " is-active" : ""}`;
-      dot.setAttribute("aria-label", `切换到第 ${i + 1} 页`);
-      dot.addEventListener("click", () => goToSlide(i));
-      el.slideDots.appendChild(dot);
-    }
-  }
-
-  function goToSlide(index) {
-    const target = Math.max(0, Math.min(TOTAL_SLIDES - 1, index));
-    const forward = target >= state.currentSlide;
-    state.currentSlide = target;
-
-    el.slideCards.forEach((card, idx) => {
-      const active = idx === target;
-      card.hidden = !active;
-      card.classList.remove("is-active", "anim-forward", "anim-back");
-      if (active) card.classList.add("is-active", forward ? "anim-forward" : "anim-back");
+    dom.slides.forEach((slide, i) => {
+      slide.classList.toggle("is-active", i === idx);
+      slide.classList.toggle("anim-back", goingBack && i !== idx);
     });
 
-    const activeCard = el.slideCards[target];
-    if (activeCard && el.hudChapterName) {
-      el.hudChapterName.textContent = activeCard.dataset.chapter || "";
-    }
+    const active = dom.slides[idx];
+    dom.hudChapter.textContent = active.dataset.title || `0${idx + 1}`;
+    dom.slideCounter.textContent = `${idx + 1} / ${dom.slides.length}`;
+    dom.prevSlideBtn.disabled = idx === 0;
+    dom.nextSlideBtn.disabled = idx === dom.slides.length - 1;
 
-    el.slideCounter.textContent = `${target + 1} / ${TOTAL_SLIDES}`;
-    el.prevSlideBtn.disabled = target === 0;
-    el.nextSlideBtn.disabled = target === TOTAL_SLIDES - 1;
-    renderSlideDots();
-
-    if (!state.sidebarManualOverride && target === INTERACTIVE_SLIDE_INDEX && !state.sidebarVisible) {
+    if (idx >= INTERACTIVE_SLIDE_INDEX && !state.sidebarVisible) {
       setSidebarVisible(true);
     }
+    renderInlineDots();
+    updateRevealAllButtonLabel();
   }
 
-  // ---- Slide 1 ----
-  function renderWxStep() {
-    const data = WX_STEP_DATA[state.wxStepIdx];
-    el.wxStepTabs.forEach((btn, idx) => btn.classList.toggle("is-active", idx === state.wxStepIdx));
-    el.wxStepDisplay.innerHTML = "";
-
-    const badge = document.createElement("div");
-    badge.className = "micro-note";
-    badge.textContent = data.badge;
-
-    const inputLine = document.createElement("div");
-    inputLine.className = "wx-input-row";
-    const keysEl = document.createElement("code");
-    keysEl.className = "mono wx-keys";
-    keysEl.textContent = data.keys;
-    inputLine.appendChild(keysEl);
-
-    const bar = document.createElement("div");
-    bar.className = "wx-bar";
-    data.cands.forEach((text, i) => {
-      const span = document.createElement("span");
-      span.className = `wx-cand${i === 0 ? (data.top1Miss ? " is-miss" : " is-top1") : ""}`;
-      span.textContent = text;
-      bar.appendChild(span);
-    });
-
-    const note = document.createElement("p");
-    note.className = "micro-note";
-    note.textContent = data.note;
-    el.wxStepDisplay.append(badge, inputLine, bar, note);
+  // ---------------------------------------------------------------------------
+  // Progressive Element Reveal
+  // ---------------------------------------------------------------------------
+  function revealElement(el) {
+    if (!el) return;
+    el.classList.remove("is-veiled");
+    el.classList.add("is-revealed");
+    updateRevealAllButtonLabel();
   }
 
-  let replayTimer = null;
-  function replayWxKeystrokes() {
-    if (replayTimer) window.clearInterval(replayTimer);
-    const full = "ni'ge'c'l'l";
-    let idx = 1;
-    el.wxDemo1Keys.textContent = full.slice(0, idx);
-    replayTimer = window.setInterval(() => {
-      idx += 1;
-      el.wxDemo1Keys.textContent = full.slice(0, idx);
-      if (idx >= full.length) {
-        window.clearInterval(replayTimer);
-        replayTimer = null;
-      }
-    }, 95);
+  function revealNextInSlide() {
+    const slide = dom.slides[state.currentSlide];
+    const veiled = Array.from(slide.querySelectorAll("[data-step].is-veiled"));
+    if (veiled.length > 0) {
+      veiled.sort((a, b) => Number(a.dataset.step) - Number(b.dataset.step));
+      revealElement(veiled[0]);
+      return true;
+    }
+    if (state.currentSlide === 8 && state.revealStep < 3) {
+      advanceModelReveal();
+      return true;
+    }
+    return false;
   }
 
-  // ---- Slide 2 ----
-  function renderWtStage() {
-    el.wtNodes.forEach((node, idx) => {
-      node.classList.toggle("is-active", idx === state.wtStageIdx);
-      node.classList.toggle("is-dimmed", idx > state.wtStageIdx);
-    });
-    const cur = WETYPE_STAGES[state.wtStageIdx];
-    el.wtDetailStage.innerHTML = "";
-
-    const title = document.createElement("h3");
-    title.textContent = cur.title;
-
-    const desc = document.createElement("p");
-    desc.className = "wt-detail-desc";
-    desc.textContent = cur.desc;
-
-    const grid = document.createElement("div");
-    grid.className = "wt-detail-grid";
-    cur.cards.forEach((c) => {
-      const card = document.createElement("div");
-      card.className = `wt-mini-card${c.cls ? ` ${c.cls}` : ""}`;
-      const strong = document.createElement("strong");
-      strong.textContent = c.head;
-      const p = document.createElement("p");
-      p.textContent = c.body;
-      card.append(strong, p);
-      grid.appendChild(card);
-    });
-
-    el.wtDetailStage.append(title, desc, grid);
+  function revealAllInSlide() {
+    const slide = dom.slides[state.currentSlide];
+    slide.querySelectorAll("[data-step].is-veiled").forEach(revealElement);
+    if (state.currentSlide === 8) {
+      state.revealStep = 3;
+      applyModelRevealState();
+    }
+    updateRevealAllButtonLabel();
   }
 
-  // ---- Slide 4 ----
-  function renderRuleCompilerDemo() {
-    el.ruleDemoTabs.innerHTML = "";
-    RULE_COMPILER_DEMOS.forEach((item, idx) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `rule-demo-btn${idx === state.activeRuleDemoIdx ? " is-active" : ""}`;
-      btn.textContent = item.id;
+  function updateRevealAllButtonLabel() {
+    const slide = dom.slides[state.currentSlide];
+    const hasVeil = slide.querySelectorAll("[data-step].is-veiled").length > 0;
+    const hasConceal = state.currentSlide === 8 && state.revealStep < 3;
+    dom.revealAllBtn.textContent = hasVeil || hasConceal ? "展开本页" : "已全展开";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Slide-Specific Interactive Controls
+  // ---------------------------------------------------------------------------
+  function initSlide1() {
+    const tabs = document.querySelectorAll(".wx-step-tab");
+    const box = document.getElementById("wx-step-display");
+    tabs.forEach((btn) => {
       btn.addEventListener("click", () => {
-        state.activeRuleDemoIdx = idx;
-        renderRuleCompilerDemo();
+        const step = Number(btn.dataset.wxStep || 0);
+        tabs.forEach((b) => b.classList.toggle("is-active", b === btn));
+        const item = WX_STEPS[step] || WX_STEPS[0];
+        box.innerHTML = `
+          <div class="demo-lead">${item.lead}</div>
+          <div class="ime-strip">${item.items.map((it) => `<span class="ime-item ${it.cls}">${escapeHtml(it.text)}</span>`).join("")}</div>
+          <div class="demo-note">${escapeHtml(item.note)}</div>
+        `;
       });
-      el.ruleDemoTabs.appendChild(btn);
     });
 
-    const cur = RULE_COMPILER_DEMOS[state.activeRuleDemoIdx];
-    el.compilerRuleId.textContent = cur.id;
-    el.compilerAlias.textContent = cur.alias;
-    el.compilerExample.textContent = cur.example;
-    el.compilerDesc.textContent = cur.desc;
-    el.compilerYaml.textContent = [
-      "patch:",
-      "  speller/algebra/+:",
-      `    # [${cur.id}]`,
-      ...cur.algebra.map((expr) => `    - '${expr}'`),
-    ].join("\n");
-  }
-
-  // ---- Slide 5 ----
-  function renderInteractionWall() {
-    const items = state.recentComments;
-    el.wallTotalCount.textContent = String(state.totalCount);
-
-    if (!items || items.length === 0) {
-      el.wallCarouselIndex.textContent = "0 / 0";
-      el.spotlightBox.innerHTML = "";
-      const empty = document.createElement("div");
-      empty.className = "spotlight-empty";
-      const strong = document.createElement("strong");
-      strong.textContent = "等待第一位同学扫码完赛...";
-      const p = document.createElement("p");
-      p.textContent = "请扫描右侧二维码进入 /play，敲完 3 句拼音即可在大屏实时上墙并生成专属 Rime 配置。";
-      empty.append(strong, p);
-      el.spotlightBox.appendChild(empty);
-
-      el.recentFeedList.innerHTML = "";
-      const feedEmpty = document.createElement("div");
-      feedEmpty.className = "lb-empty";
-      feedEmpty.textContent = "暂无提交点评";
-      el.recentFeedList.appendChild(feedEmpty);
-      return;
-    }
-
-    if (state.spotlightIndex >= items.length) state.spotlightIndex = 0;
-    const activeItem = items[state.spotlightIndex];
-    el.wallCarouselIndex.textContent = `${state.spotlightIndex + 1} / ${items.length}`;
-
-    el.spotlightBox.innerHTML = "";
-    const topDiv = document.createElement("div");
-    topDiv.className = "spotlight-top";
-    const idWrap = document.createElement("div");
-    const nickDiv = document.createElement("div");
-    nickDiv.className = "spotlight-nick";
-    nickDiv.textContent = activeItem.nickname || "Anonymous";
-    const titleBadge = document.createElement("span");
-    titleBadge.className = "spotlight-title-badge";
-    titleBadge.textContent = activeItem.title || "节奏输入派";
-    idWrap.append(nickDiv, titleBadge);
-
-    const timeSpan = document.createElement("span");
-    timeSpan.className = "spotlight-time mono";
-    timeSpan.textContent = formatShortTime(activeItem.created_at);
-    topDiv.append(idWrap, timeSpan);
-
-    const commentBox = document.createElement("blockquote");
-    commentBox.className = "spotlight-comment";
-    commentBox.textContent = activeItem.comment || "已完成 3 句拼音竞速，风格档案已生成。";
-
-    const rulesRow = document.createElement("div");
-    rulesRow.className = "spotlight-rules";
-    const rulesLabel = document.createElement("span");
-    rulesLabel.className = "spotlight-rules-label";
-    rulesLabel.textContent = "识别规则标签：";
-    rulesRow.appendChild(rulesLabel);
-    const rules = Array.isArray(activeItem.rules) ? activeItem.rules : [];
-    if (rules.length > 0) {
-      rules.forEach((rule) => rulesRow.appendChild(buildRuleChip(rule, true)));
-    } else {
-      const cleanChip = document.createElement("span");
-      cleanChip.className = "rule-chip is-muted";
-      cleanChip.textContent = "标准全拼无明显偏置";
-      rulesRow.appendChild(cleanChip);
-    }
-    el.spotlightBox.append(topDiv, commentBox, rulesRow);
-
-    el.recentFeedList.innerHTML = "";
-    items.forEach((item, idx) => {
-      const card = document.createElement("div");
-      card.className = `feed-item${idx === state.spotlightIndex ? " is-selected" : ""}`;
-      card.addEventListener("click", () => {
-        state.spotlightIndex = idx;
-        renderInteractionWall();
-      });
-
-      const head = document.createElement("div");
-      head.className = "feed-item-head";
-      const nick = document.createElement("span");
-      nick.className = "feed-item-nick";
-      nick.textContent = item.nickname || "Anonymous";
-      const title = document.createElement("span");
-      title.className = "feed-item-title";
-      title.textContent = item.title || "节奏输入派";
-      head.append(nick, title);
-
-      const comment = document.createElement("p");
-      comment.className = "feed-item-comment";
-      comment.textContent = item.comment || "";
-
-      const rulesDiv = document.createElement("div");
-      rulesDiv.className = "feed-item-rules";
-      const itemRules = Array.isArray(item.rules) ? item.rules : [];
-      if (itemRules.length > 0) {
-        itemRules.slice(0, 4).forEach((r) => rulesDiv.appendChild(buildRuleChip(r, false)));
-      } else {
-        const emptyChip = document.createElement("span");
-        emptyChip.className = "rule-chip is-muted";
-        emptyChip.textContent = "全拼稳健";
-        rulesDiv.appendChild(emptyChip);
-      }
-      card.append(head, comment, rulesDiv);
-      el.recentFeedList.appendChild(card);
-    });
-  }
-
-  // ---- Slide 6 ----
-  function updateHystSimulation(rateVal) {
-    const rate = Number(rateVal);
-    el.hystRateVal.textContent = `${rate}%`;
-    el.hystSlider.value = String(rate);
-
-    el.svgNodeOff.setAttribute("stroke-width", "1.5");
-    el.svgNodeMid.setAttribute("stroke-width", "1.5");
-    el.svgNodeOn.setAttribute("stroke-width", "1.5");
-
-    if (rate >= 15) {
-      el.svgNodeOn.setAttribute("stroke-width", "4");
-      el.hystStateBadge.textContent = "状态：触发开启 (>=15%)";
-      el.hystStateBadge.className = "tag-pill is-blue";
-      el.hystSimOutput.textContent = "rule_notify.lua 首候选轻提示：[已为你自动开启 ong=on]（剩余 3 次即静默）";
-    } else if (rate < 5) {
-      el.svgNodeOff.setAttribute("stroke-width", "4");
-      el.hystStateBadge.textContent = "状态：自动降权关闭 (<5%)";
-      el.hystStateBadge.className = "tag-pill is-red";
-      el.hystSimOutput.textContent = "rule_updater.py：命中率过低，从受控补丁区移除 ong=on，避免词库污染";
-    } else {
-      el.svgNodeMid.setAttribute("stroke-width", "4");
-      el.hystStateBadge.textContent = "状态：迟滞缓冲带 (5%~15%)";
-      el.hystStateBadge.className = "tag-pill";
-      el.hystSimOutput.textContent = "Rime 候选注释预览：处于迟滞缓冲带，维持原启用/休眠状态，零反复横跳";
-    }
-  }
-
-  // ---- Slide 7 ----
-  function renderNoiseSimDemo() {
-    el.simTabs.innerHTML = "";
-    NOISE_SIM_DEMOS.forEach((item, idx) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `sim-btn${idx === state.activeSimDemoIdx ? " is-active" : ""}`;
-      btn.textContent = item.label;
-      btn.addEventListener("click", () => {
-        state.activeSimDemoIdx = idx;
-        renderNoiseSimDemo();
-      });
-      el.simTabs.appendChild(btn);
-    });
-
-    const cur = NOISE_SIM_DEMOS[state.activeSimDemoIdx];
-    el.simPipelineView.innerHTML = "";
-    cur.steps.forEach((line) => {
-      const div = document.createElement("div");
-      div.textContent = line;
-      el.simPipelineView.appendChild(div);
-    });
-  }
-
-  function renderBpeToggle() {
-    el.bpeModeBad.hidden = state.bpeShowGood;
-    el.bpeModeGood.hidden = !state.bpeShowGood;
-    el.bpeToggleBtn.textContent = state.bpeShowGood ? "切回 BPE 盲区对比" : "切换为单字母分词";
-  }
-
-  // ---- Slide 8 ----
-  function renderBridgeStage() {
-    el.bridgeNodes.forEach((node, idx) => {
-      node.classList.toggle("is-active", idx === state.bridgeStageIdx);
-      node.classList.toggle("is-dimmed", idx > state.bridgeStageIdx);
-    });
-    const cur = BRIDGE_NODES[state.bridgeStageIdx];
-    el.bridgeDetailBox.innerHTML = "";
-
-    const title = document.createElement("h3");
-    title.textContent = cur.title;
-
-    const desc = document.createElement("p");
-    desc.className = "wt-detail-desc";
-    desc.textContent = cur.desc;
-
-    const tags = document.createElement("div");
-    tags.className = "noise-chips";
-    cur.tags.forEach((t) => {
-      const span = document.createElement("span");
-      span.className = "tag-pill is-blue";
-      span.textContent = t;
-      tags.appendChild(span);
-    });
-
-    el.bridgeDetailBox.append(title, desc, tags);
-  }
-
-  // ---- Slide 9 ----
-  function normalizePredList(pred) {
-    if (Array.isArray(pred)) {
-      return pred.slice(0, 3).map((item) => {
-        if (typeof item === "string") return { text: item, score: null };
-        if (item && typeof item === "object") {
-          return {
-            text: String(item.text || item.cand || item.pred || ""),
-            score: item.score != null ? String(item.score) : null,
-          };
+    const replayBtn = document.getElementById("wx-replay-btn");
+    const keysEl = document.getElementById("wx-case1-keys");
+    replayBtn.addEventListener("click", () => {
+      if (state.wxReplayTimer) clearInterval(state.wxReplayTimer);
+      const target = "ni'ge'c'l'l";
+      let pos = 1;
+      keysEl.textContent = target.slice(0, pos);
+      state.wxReplayTimer = setInterval(() => {
+        pos += 1;
+        keysEl.textContent = target.slice(0, pos);
+        if (pos >= target.length) {
+          clearInterval(state.wxReplayTimer);
+          state.wxReplayTimer = null;
         }
-        return { text: String(item), score: null };
-      });
-    }
-    if (typeof pred === "string" && pred.trim()) return [{ text: pred.trim(), score: null }];
-    return [{ text: "--", score: null }];
-  }
-
-  function renderPredColumn(container, pred) {
-    container.innerHTML = "";
-    normalizePredList(pred).forEach((item, idx) => {
-      const row = document.createElement("div");
-      row.className = `pred-item${idx === 0 ? " is-top1" : ""}`;
-      const textSpan = document.createElement("span");
-      textSpan.textContent = item.text;
-      const rankSpan = document.createElement("span");
-      rankSpan.className = "pred-rank";
-      rankSpan.textContent = item.score ? `Top-${idx + 1} · ${item.score}` : `Top-${idx + 1}`;
-      row.append(textSpan, rankSpan);
-      container.appendChild(row);
+      }, 95);
     });
   }
 
-  function applyRevealState() {
-    el.colBase.classList.toggle("is-concealed", state.revealStep < 1);
-    el.colUserA.classList.toggle("is-concealed", state.revealStep < 2);
-    el.colUserB.classList.toggle("is-concealed", state.revealStep < 3);
-    el.revealModelsBtn.textContent =
-      state.revealStep >= 3 ? "重放逐步对比" : `揭晓下一模型 (${state.revealStep}/3)`;
+  function renderWtStage(idx) {
+    state.wtStage = idx;
+    document.querySelectorAll("#wt-stage-bar .wt-node").forEach((b) => {
+      b.classList.toggle("is-active", Number(b.dataset.wt) === idx);
+    });
+    document.querySelectorAll(".svg-stage").forEach((g) => {
+      g.classList.toggle("is-active", Number(g.dataset.wtTarget) === idx);
+    });
+    const d = WT_STAGES[idx] || WT_STAGES[0];
+    document.getElementById("wt-detail-stage").innerHTML = `
+      <div class="wt-detail-head">
+        <h3>${escapeHtml(d.title)}</h3>
+        <span class="tag tag-dark">交互钻取 ${idx + 1} / 4</span>
+      </div>
+      <p class="wt-detail-sub">${escapeHtml(d.sub)}</p>
+      <div class="wt-cards-3">
+        ${d.cards
+          .map(
+            (c) => `
+          <div class="wt-mini-tile ${c.warn ? "is-warn" : ""}">
+            <b>${escapeHtml(c.title)}</b>
+            <p>${escapeHtml(c.body)}</p>
+          </div>`
+          )
+          .join("")}
+      </div>
+    `;
   }
 
-  function renderCompareCases() {
-    const cases = state.compareCases;
-    if (!cases.length) return;
-    if (state.currentCaseIndex >= cases.length) state.currentCaseIndex = 0;
+  function initSlide2() {
+    document.querySelectorAll("#wt-stage-bar .wt-node").forEach((btn) => {
+      btn.addEventListener("click", () => renderWtStage(Number(btn.dataset.wt)));
+    });
+    document.querySelectorAll(".svg-stage").forEach((g) => {
+      g.addEventListener("click", () => {
+        revealElement(document.querySelector("#slide-2 [data-step='1']"));
+        renderWtStage(Number(g.dataset.wtTarget));
+      });
+    });
+    renderWtStage(2);
+  }
 
-    el.casesSourceBadge.textContent = state.compareSourceLabel;
-    el.caseSelector.innerHTML = "";
-    cases.forEach((item, idx) => {
+  function initSlide4() {
+    const chips = document.getElementById("rule-chip-group");
+    const pre = document.getElementById("rime-yaml-preview");
+
+    function renderYaml() {
+      const selected = RIME_RULES.filter((r) => state.selectedRules.has(r.id));
+      const lines = selected.length
+        ? selected.map((r) => `    - ${r.line}  # ${r.id}`).join("\n")
+        : "    # 请至少勾选一条个性化模糊音规则";
+      pre.textContent =
+        "patch:\n" +
+        "  # BEGIN PERSONAL-IME AUTO RULES (白名单受控输出)\n" +
+        "  speller/algebra/+:\n" +
+        lines +
+        "\n  # END PERSONAL-IME AUTO RULES";
+    }
+
+    RIME_RULES.forEach((rule) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = `case-btn${idx === state.currentCaseIndex ? " is-active" : ""}`;
-      btn.textContent = `#${idx + 1} ${item.raw_keys || ""}`;
+      btn.className = "rule-chip" + (state.selectedRules.has(rule.id) ? " is-selected" : "");
+      btn.textContent = rule.label;
       btn.addEventListener("click", () => {
-        state.currentCaseIndex = idx;
-        renderCompareCases();
+        if (state.selectedRules.has(rule.id)) state.selectedRules.delete(rule.id);
+        else state.selectedRules.add(rule.id);
+        btn.classList.toggle("is-selected", state.selectedRules.has(rule.id));
+        renderYaml();
       });
-      el.caseSelector.appendChild(btn);
+      chips.appendChild(btn);
     });
-
-    const current = cases[state.currentCaseIndex];
-    el.caseContext.textContent = current.context || "（无前置语境）";
-    el.caseRawKeys.textContent = current.raw_keys || "--";
-    el.caseNote.textContent = current.note || "暂无补充说明";
-    renderPredColumn(el.caseBasePred, current.base_pred);
-    renderPredColumn(el.caseUserAPred, current.user_a_pred);
-    renderPredColumn(el.caseUserBPred, current.user_b_pred);
-    applyRevealState();
+    renderYaml();
   }
 
-  function parseCasesPayload(raw) {
-    const list = Array.isArray(raw) ? raw : Array.isArray(raw?.cases) ? raw.cases : null;
-    if (!list || list.length === 0) return null;
-    const valid = list.filter(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        "raw_keys" in item &&
-        "base_pred" in item &&
-        "user_a_pred" in item &&
-        "user_b_pred" in item
-    );
-    return valid.length > 0 ? valid : null;
-  }
+  function initSlide6() {
+    const slider = document.getElementById("hyst-slider");
+    const rateVal = document.getElementById("hyst-rate-val");
+    const stateBadge = document.getElementById("hyst-state-badge");
+    const preview = document.getElementById("hyst-comment-preview");
+    const cursorGroup = document.getElementById("hyst-cursor-group");
+    const cursorDot = document.getElementById("hyst-cursor-dot");
+    const presets = document.querySelectorAll(".preset-rate-btn");
 
-  async function loadExternalCasesIfSpecified() {
-    const params = new URLSearchParams(window.location.search);
-    const customUrl = params.get("cases");
-    if (!customUrl) return;
-    try {
-      const resp = await fetch(customUrl, { headers: { Accept: "application/json" } });
-      if (!resp.ok) return;
-      const parsed = parseCasesPayload(await resp.json());
-      if (parsed) {
-        state.compareCases = parsed;
-        state.compareSourceLabel = `已加载外部 JSON (${parsed.length} 组)`;
-        state.currentCaseIndex = 0;
-        renderCompareCases();
-      }
-    } catch {
-      // keep builtin cases
-    }
-  }
+    function updateRate(val) {
+      const rate = Math.max(0, Math.min(30, Number(val)));
+      slider.value = String(rate);
+      rateVal.textContent = `当前样本触发率：${rate}%`;
 
-  // ---- Right Sidebar: Leaderboard ----
-  function renderLeaderboard() {
-    el.lbTotalBadge.textContent = `${state.totalCount} 人完赛`;
-    el.leaderboardList.innerHTML = "";
+      // Map 0..30% to x=60..820, matching 5% at x=190 and 15% at x=440
+      let xPos;
+      if (rate <= 5) xPos = 60 + (rate / 5) * 130;
+      else if (rate <= 15) xPos = 190 + ((rate - 5) / 10) * 250;
+      else xPos = 440 + ((rate - 15) / 15) * 380;
 
-    if (!state.leaderboard || state.leaderboard.length === 0) {
-      const empty = document.createElement("div");
-      empty.className = "lb-empty";
-      empty.textContent = "排行榜虚位以待，手机扫码右上角即可成为第一位上榜选手。";
-      el.leaderboardList.appendChild(empty);
-      return;
-    }
+      const isOn = rate >= 15;
+      const isOff = rate < 5;
+      const dotY = isOn ? 112 : 214;
+      const dotColor = isOn ? "#1D4ED8" : isOff ? "#64748B" : "#D97706";
 
-    state.leaderboard.forEach((row, idx) => {
-      const rank = idx + 1;
-      const rowEl = document.createElement("div");
-      rowEl.className = `lb-row${rank <= 3 ? ` is-top-${rank}` : ""}`;
+      cursorGroup.setAttribute("transform", `translate(${xPos.toFixed(1)}, 0)`);
+      cursorDot.setAttribute("cy", String(dotY));
+      cursorDot.setAttribute("fill", dotColor);
 
-      const rankBadge = document.createElement("span");
-      rankBadge.className = "lb-rank";
-      rankBadge.textContent = String(rank);
-
-      const mainDiv = document.createElement("div");
-      mainDiv.className = "lb-main";
-
-      const nameLine = document.createElement("div");
-      nameLine.className = "lb-name-line";
-      const nickSpan = document.createElement("span");
-      nickSpan.className = "lb-nickname";
-      nickSpan.textContent = row.nickname || "Anonymous";
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "lb-title-pill";
-      titleSpan.textContent = row.title || "节奏输入派";
-      nameLine.append(nickSpan, titleSpan);
-
-      const rulesDiv = document.createElement("div");
-      rulesDiv.className = "lb-rules";
-      const rules = Array.isArray(row.rules) ? row.rules : [];
-      if (rules.length > 0) {
-        rules.slice(0, 3).forEach((r) => rulesDiv.appendChild(buildRuleChip(r, false)));
+      if (isOn) {
+        stateBadge.textContent = "状态：自动开启 ON (>= 15%)";
+        stateBadge.className = "ime-item is-winner";
+        preview.textContent = "rule_notify.lua：写入 algebra 补丁并在首候选尾缀提示 [已为你自动开启 ong=on] (3 次即静默)";
+      } else if (isOff) {
+        stateBadge.textContent = "状态：自动休眠 OFF (< 5%)";
+        stateBadge.className = "ime-item is-miss";
+        preview.textContent = "触发率低于 5%，自动回收并清理对应补丁，避免脏规则污染正常输入";
       } else {
-        const cleanTag = document.createElement("span");
-        cleanTag.className = "rule-chip is-muted";
-        cleanTag.textContent = "标准全拼";
-        rulesDiv.appendChild(cleanTag);
+        stateBadge.textContent = "状态：迟滞防抖带 (5% ~ 15%)";
+        stateBadge.className = "ime-item";
+        preview.textContent = "维持此前已启用或休眠状态，避免用户换键盘或偶发波动引发反复抖动";
       }
-      mainDiv.append(nameLine, rulesDiv);
 
-      const metricsDiv = document.createElement("div");
-      metricsDiv.className = "lb-metrics mono";
-      const scoreSpan = document.createElement("span");
-      scoreSpan.className = "lb-score";
-      scoreSpan.textContent = `${Number(row.score || 0).toFixed(1)} 分`;
-      const subSpan = document.createElement("span");
-      subSpan.className = "lb-submetrics";
-      subSpan.textContent = `${Number(row.cpm || 0).toFixed(0)} 键/分 · ${Number(row.accuracy || 0).toFixed(1)}%`;
-      metricsDiv.append(scoreSpan, subSpan);
+      presets.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.rate) === rate));
+    }
 
-      rowEl.append(rankBadge, mainDiv, metricsDiv);
-      el.leaderboardList.appendChild(rowEl);
+    slider.addEventListener("input", () => updateRate(slider.value));
+    presets.forEach((btn) => btn.addEventListener("click", () => updateRate(btn.dataset.rate)));
+    updateRate(8);
+  }
+
+  function initSlide7() {
+    const toggleBtn = document.getElementById("bpe-toggle-btn");
+    const badEl = document.getElementById("bpe-mode-bad");
+    const goodEl = document.getElementById("bpe-mode-good");
+    toggleBtn.addEventListener("click", () => {
+      state.bpeSingleChar = !state.bpeSingleChar;
+      badEl.classList.toggle("is-dimmed", state.bpeSingleChar);
+      goodEl.hidden = !state.bpeSingleChar;
+      toggleBtn.textContent = state.bpeSingleChar ? "收起对比" : "切换至单字逐键切分";
+    });
+
+    const ROWS = [
+      ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+      ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+      ["z", "x", "c", "v", "b", "n", "m"],
+    ];
+    const NEIGHBORS = {
+      g: { f: "0.82", h: "0.82", t: "0.54", b: "0.49", v: "0.49" },
+      n: { b: "0.82", m: "0.82", h: "0.54", j: "0.54" },
+      q: { w: "0.82", a: "0.54" },
+      w: { q: "0.82", e: "0.82", s: "0.54", a: "0.49" },
+    };
+    const ABBR_SET = new Set(["w", "m", "x", "q", "c", "f"]);
+
+    const kbWrap = document.getElementById("qwerty-heatmap");
+    const caption = document.getElementById("kb-sim-caption");
+    const noteStrip = document.getElementById("kb-formula-note");
+    const kbBtns = document.querySelectorAll(".kb-mode-btn");
+
+    function renderKeyboard() {
+      const target = state.kbTarget;
+      const nearMap = NEIGHBORS[target] || NEIGHBORS.g;
+      kbWrap.innerHTML = ROWS.map(
+        (row, rIdx) =>
+          `<div class="kb-row r-${rIdx + 1}">${row
+            .map((ch) => {
+              let cls = "kb-key";
+              let sub = "&nbsp;";
+              if (state.kbMode === "adjacent") {
+                if (ch === target) {
+                  cls += " is-target";
+                  sub = "1.00";
+                } else if (nearMap[ch]) {
+                  cls += " is-near";
+                  sub = nearMap[ch];
+                }
+              } else if (state.kbMode === "abbr") {
+                if (ABBR_SET.has(ch)) {
+                  cls += " is-abbr";
+                  sub = "简拼";
+                }
+              } else if (state.kbMode === "jieba") {
+                if (["w", "m", "x"].includes(ch)) {
+                  cls += " is-target";
+                  sub = "保留";
+                } else if (["o", "e", "i"].includes(ch)) {
+                  cls += " is-near";
+                  sub = "省略";
+                }
+              }
+              return `<button type="button" class="${cls}" data-kchar="${ch}">${ch.toUpperCase()}<small>${sub}</small></button>`;
+            })
+            .join("")}</div>`
+      ).join("");
+
+      kbWrap.querySelectorAll(".kb-key").forEach((kbtn) => {
+        kbtn.addEventListener("click", () => {
+          const k = kbtn.dataset.kchar;
+          state.kbMode = "adjacent";
+          state.kbTarget = NEIGHBORS[k] ? k : "g";
+          kbBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.kb === "adjacent"));
+          renderKeyboard();
+        });
+      });
+
+      if (state.kbMode === "adjacent") {
+        caption.textContent = `当前聚焦键 ${target.toUpperCase()}：周围邻键按 1/dist^2 分配蹭键概率`;
+        noteStrip.innerHTML = `<span class="ime-item is-winner">目标键 ${target} -> 物理旁键距离惩罚</span><span class="ime-item">复现如 paoshibnie 中的 b/n 顺带蹭键</span>`;
+      } else if (state.kbMode === "abbr") {
+        caption.textContent = "整句首字母简拼采样：6 字保留 6 键 (wmxqcf -> 我们先去吃饭)";
+        noteStrip.innerHTML = `<span class="ime-item is-winner">21 种声韵母缩写比例直接由日志估算</span><span class="ime-item">让端侧模型吃透极端省键风格</span>`;
+      } else {
+        caption.textContent = "基于 jieba 词级采样：整词整段丢弃韵母（wo men xian -> w m x）";
+        noteStrip.innerHTML = `<span class="ime-item is-winner">word-level 丢音节模拟，非逐字随机删键</span><span class="ime-item">贴合真实中文连拼手癖</span>`;
+      }
+    }
+
+    kbBtns.forEach((b) =>
+      b.addEventListener("click", () => {
+        state.kbMode = b.dataset.kb;
+        kbBtns.forEach((x) => x.classList.toggle("is-active", x === b));
+        renderKeyboard();
+      })
+    );
+    renderKeyboard();
+  }
+
+  function initSlide8() {
+    function renderBridge(idx) {
+      state.bridgeNode = idx;
+      document.querySelectorAll("#bridge-node-bar .p4-node").forEach((b) => {
+        b.classList.toggle("is-active", Number(b.dataset.bridge) === idx);
+      });
+      const item = BRIDGE_NODES[idx] || BRIDGE_NODES[0];
+      document.getElementById("bridge-detail-box").innerHTML = `
+        <div>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.desc)}</p>
+        </div>
+        <div class="badge-row">
+          ${item.badges.map((b) => `<span class="tag tag-blue">${escapeHtml(b)}</span>`).join("")}
+        </div>
+      `;
+    }
+
+    document.querySelectorAll("#bridge-node-bar .p4-node").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        revealElement(document.querySelector("#slide-8 [data-step='1']"));
+        renderBridge(Number(btn.dataset.bridge));
+      });
+    });
+    renderBridge(0);
+  }
+
+  function applyModelRevealState() {
+    const cols = document.querySelectorAll("#case-compare-grid .cmp-col");
+    cols.forEach((col, i) => {
+      col.classList.toggle("is-concealed", i >= state.revealStep);
+    });
+    const btn = document.getElementById("reveal-models-btn");
+    if (btn) {
+      btn.textContent = state.revealStep >= 3 ? "已全部揭晓（重置）" : "逐个揭晓 A/B 结果";
+    }
+    updateRevealAllButtonLabel();
+  }
+
+  function advanceModelReveal() {
+    state.revealStep = state.revealStep >= 3 ? 1 : state.revealStep + 1;
+    applyModelRevealState();
+  }
+
+  function renderCase(idx) {
+    state.caseIdx = (idx + state.cases.length) % state.cases.length;
+    const c = state.cases[state.caseIdx];
+    document.getElementById("case-context-val").textContent = c.context;
+    document.getElementById("case-keys-val").textContent = c.raw_keys;
+    document.getElementById("case-note-val").textContent = c.note || "";
+    document.getElementById("case-base-pred").textContent = c.base_pred;
+    document.getElementById("case-ua-pred").textContent = c.user_a_pred;
+    document.getElementById("case-ub-pred").textContent = c.user_b_pred;
+
+    document.querySelectorAll("#case-pills .case-tab").forEach((b, i) => {
+      b.classList.toggle("is-active", i === state.caseIdx);
+    });
+    document.querySelectorAll("#s9-mini-strip .mini-case-card").forEach((m, i) => {
+      m.classList.toggle("is-active", i === state.caseIdx);
     });
   }
 
-  function setLiveStatus(ok, message) {
-    el.lbLiveStatus.classList.toggle("is-error", !ok);
-    el.lbLiveStatus.innerHTML = "";
-    const dot = document.createElement("span");
-    dot.className = "live-dot";
-    dot.setAttribute("aria-hidden", "true");
-    el.lbLiveStatus.append(dot, document.createTextNode(message));
+  function rebuildCasePills() {
+    const strip = document.getElementById("case-pills");
+    const miniStrip = document.getElementById("s9-mini-strip");
+    strip.innerHTML = state.cases
+      .map((c, i) => `<button type="button" class="case-tab ${i === state.caseIdx ? "is-active" : ""}" data-cidx="${i}">#${i + 1} ${escapeHtml(c.raw_keys)}</button>`)
+      .join("");
+    miniStrip.innerHTML = state.cases
+      .slice(0, 4)
+      .map((c, i) => `<div class="mini-case-card ${i === state.caseIdx ? "is-active" : ""}" data-cidx="${i}"><b>${escapeHtml(c.raw_keys)}</b><span>${escapeHtml(c.context)}</span></div>`)
+      .join("");
+
+    strip.querySelectorAll(".case-tab").forEach((b) => b.addEventListener("click", () => renderCase(Number(b.dataset.cidx))));
+    miniStrip.querySelectorAll(".mini-case-card").forEach((m) => m.addEventListener("click", () => renderCase(Number(m.dataset.cidx))));
+    renderCase(0);
   }
 
-  async function fetchLeaderboard() {
-    try {
-      const resp = await fetch("/api/leaderboard?limit=30", {
-        method: "GET",
-        headers: { Accept: "application/json" },
+  function initSlide9() {
+    document.getElementById("case-prev-btn").addEventListener("click", () => renderCase(state.caseIdx - 1));
+    document.getElementById("case-next-btn").addEventListener("click", () => renderCase(state.caseIdx + 1));
+    document.getElementById("reveal-models-btn").addEventListener("click", advanceModelReveal);
+    document.querySelectorAll("#case-compare-grid .cmp-col").forEach((col, i) => {
+      col.addEventListener("click", () => {
+        if (state.revealStep <= i) {
+          state.revealStep = i + 1;
+          applyModelRevealState();
+        }
       });
-      if (!resp.ok) {
-        setLiveStatus(false, "同步重试中");
-        return;
-      }
-      const data = await resp.json();
-      const prevTopId = state.recentComments[0]?.id;
-      state.totalCount = Number(data.total || 0);
-      state.leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
-      state.recentComments = Array.isArray(data.recent_comments) ? data.recent_comments : [];
-      if (state.recentComments[0]?.id && state.recentComments[0].id !== prevTopId) {
-        state.spotlightIndex = 0;
-      }
-      setLiveStatus(true, "2s 同步中");
-      renderLeaderboard();
-      renderInteractionWall();
-    } catch {
-      setLiveStatus(false, "连接重试中");
+    });
+
+    const fileInput = document.getElementById("cases-file-input");
+    const sourcePill = document.getElementById("cases-source-pill");
+    fileInput.addEventListener("change", () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result));
+          const list = Array.isArray(parsed) ? parsed : parsed.cases;
+          if (Array.isArray(list) && list.length > 0) {
+            state.cases = list;
+            sourcePill.textContent = `已载入：${f.name} (${list.length} 条)`;
+            rebuildCasePills();
+          }
+        } catch (_err) {
+          sourcePill.textContent = "JSON 格式无效，保留内置对照";
+        }
+      };
+      reader.readAsText(f, "utf-8");
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const extUrl = params.get("cases");
+    if (extUrl) {
+      fetch(extUrl)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((parsed) => {
+          const list = Array.isArray(parsed) ? parsed : parsed && parsed.cases;
+          if (Array.isArray(list) && list.length > 0) {
+            state.cases = list;
+            sourcePill.textContent = `外链对照集 (${list.length} 条)`;
+            rebuildCasePills();
+          }
+        })
+        .catch(() => {});
     }
+
+    rebuildCasePills();
+    applyModelRevealState();
   }
 
-  function updateFullscreenLabel() {
-    el.fullscreenBtn.textContent = document.fullscreenElement ? "退出全屏" : "全屏";
+  // ---------------------------------------------------------------------------
+  // Live Right Panel: QR + /api/leaderboard Polling + Slide 5 KPI Mirror + Reset
+  // ---------------------------------------------------------------------------
+  function initQrAndClipboard() {
+    const playUrl = `${window.location.origin}/play`;
+    dom.playUrlText.textContent = playUrl;
+    dom.qrContainer.innerHTML = QR_ALGO.toSvg(playUrl);
+    dom.copyUrlBtn.addEventListener("click", () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard
+          .writeText(playUrl)
+          .then(() => {
+            dom.copyFeedback.textContent = "已复制链接";
+          })
+          .catch(() => {
+            dom.copyFeedback.textContent = playUrl;
+          });
+      }
+    });
   }
 
-  async function toggleFullscreen() {
-    try {
-      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-      else await document.exitFullscreen();
-    } catch {
-      // ignore
+  function renderLeaderboard(payload) {
+    const entries = Array.isArray(payload.leaderboard) ? payload.leaderboard : [];
+    const comments = Array.isArray(payload.recent_comments) ? payload.recent_comments : [];
+    const totalCount = Number.isFinite(payload.total)
+      ? payload.total
+      : Number.isFinite(payload.total_count)
+      ? payload.total_count
+      : entries.length;
+
+    dom.countBadge.textContent = `${totalCount} 人完赛`;
+    dom.pollBadge.textContent = "2s 同步中";
+    dom.pollBadge.classList.remove("is-error");
+
+    // Mirror real-time KPI onto Slide 5
+    if (dom.livePlayers) dom.livePlayers.textContent = String(totalCount);
+    if (dom.liveTopScore) {
+      const topScore = entries.length ? Number(entries[0].score ?? entries[0].composite_score ?? 0) : 0;
+      dom.liveTopScore.textContent = topScore.toFixed(1);
     }
-    updateFullscreenLabel();
-  }
+    if (dom.liveTopRule) {
+      const counts = new Map();
+      entries.forEach((row) => {
+        const list = row.rules || row.detected_rules || [];
+        list.forEach((r) => counts.set(r, (counts.get(r) || 0) + 1));
+      });
+      let bestRule = "--";
+      let bestCnt = 0;
+      counts.forEach((cnt, r) => {
+        if (cnt > bestCnt) {
+          bestCnt = cnt;
+          bestRule = r;
+        }
+      });
+      dom.liveTopRule.textContent = bestRule;
+    }
 
-  function openResetModal() {
-    el.resetModal.hidden = false;
-    el.resetTokenInput.value = "";
-    el.resetFeedback.hidden = true;
-    el.resetFeedback.classList.remove("is-ok");
-    el.resetTokenInput.focus();
-  }
+    if (comments.length > 0) {
+      dom.commentsBar.hidden = false;
+      dom.commentsTrack.innerHTML = comments
+        .map((c) => {
+          const text = c.comment || c.style_label || c.title || "";
+          return `<span class="comment-chip"><strong>${escapeHtml(c.nickname)}</strong>：${escapeHtml(text)}</span>`;
+        })
+        .join("");
+    } else {
+      dom.commentsBar.hidden = true;
+    }
 
-  function closeResetModal() {
-    el.resetModal.hidden = true;
-  }
-
-  async function handleResetSubmit(event) {
-    event.preventDefault();
-    const token = el.resetTokenInput.value.trim();
-    if (!token) {
-      el.resetFeedback.hidden = false;
-      el.resetFeedback.classList.remove("is-ok");
-      el.resetFeedback.textContent = "请输入管理员口令。";
+    if (entries.length === 0) {
+      dom.boardEmpty.hidden = false;
+      dom.boardList.hidden = true;
+      dom.boardList.innerHTML = "";
+      state.knownRanks.clear();
       return;
     }
-    try {
-      const resp = await fetch("/api/reset", {
+
+    dom.boardEmpty.hidden = true;
+    dom.boardList.hidden = false;
+
+    const nextKnown = new Map();
+    const html = entries
+      .map((entry, idx) => {
+        const rank = idx + 1;
+        const id = entry.id || `${entry.nickname}-${idx}`;
+        const prev = state.knownRanks.get(id);
+        const isNew = prev === undefined || prev !== rank;
+        nextKnown.set(id, rank);
+
+        const rankClass = rank <= 3 ? ` rank-${rank}` : "";
+        const ruleList = entry.rules || entry.detected_rules || [];
+        const tags = ruleList
+          .slice(0, 3)
+          .map((t) => `<span class="lb-rule-tag">${escapeHtml(t)}</span>`)
+          .join("");
+        const scoreVal = Number(entry.score ?? entry.composite_score ?? 0).toFixed(1);
+        const titleLabel = entry.title || entry.style_label || "";
+        return `
+          <li class="lb-row${rankClass}${isNew && state.knownRanks.size > 0 ? " is-new" : ""}">
+            <div class="lb-rank">${rank}</div>
+            <div>
+              <div class="lb-name-line">
+                <span class="lb-nick">${escapeHtml(entry.nickname || "匿名")}</span>
+                <span class="lb-style">${escapeHtml(titleLabel)}</span>
+              </div>
+              <div class="lb-tags">${tags}</div>
+            </div>
+            <div class="lb-score-col">
+              <div class="lb-score">${scoreVal} 分</div>
+              <div class="lb-sub">${Math.round(entry.cpm || 0)} 键/分 · ${Number(entry.accuracy || 0).toFixed(1)}%</div>
+            </div>
+          </li>
+        `;
+      })
+      .join("");
+    state.knownRanks = nextKnown;
+    dom.boardList.innerHTML = html;
+  }
+
+  function pollLeaderboard() {
+    fetch("/api/leaderboard?limit=30")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(renderLeaderboard)
+      .catch(() => {
+        dom.pollBadge.textContent = "等待重连";
+        dom.pollBadge.classList.add("is-error");
+      });
+  }
+
+  function initResetModal() {
+    function openModal() {
+      dom.resetModal.hidden = false;
+      dom.resetErrorMsg.hidden = true;
+      dom.adminTokenInput.value = "";
+      setTimeout(() => dom.adminTokenInput.focus(), 40);
+    }
+    function closeModal() {
+      dom.resetModal.hidden = true;
+    }
+
+    dom.openResetBtn.addEventListener("click", openModal);
+    dom.closeResetBtn.addEventListener("click", closeModal);
+    dom.cancelResetBtn.addEventListener("click", closeModal);
+    dom.resetModal.addEventListener("click", (e) => {
+      if (e.target === dom.resetModal) closeModal();
+    });
+
+    dom.resetForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const token = dom.adminTokenInput.value.trim();
+      fetch("/api/reset", {
         method: "POST",
         headers: { "X-Admin-Token": token },
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (resp.ok) {
-        el.resetFeedback.hidden = false;
-        el.resetFeedback.classList.add("is-ok");
-        el.resetFeedback.textContent = `已清空 ${Number(data.deleted || 0)} 条排行榜记录。`;
-        await fetchLeaderboard();
-        window.setTimeout(closeResetModal, 900);
-        return;
-      }
-      el.resetFeedback.hidden = false;
-      el.resetFeedback.classList.remove("is-ok");
-      el.resetFeedback.textContent = data.detail || `清榜失败 (HTTP ${resp.status})`;
-    } catch {
-      el.resetFeedback.hidden = false;
-      el.resetFeedback.classList.remove("is-ok");
-      el.resetFeedback.textContent = "无法连接后端 /api/reset 接口。";
-    }
+      })
+        .then(async (r) => {
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail || `清空失败 (${r.status})`);
+          }
+          return r.json();
+        })
+        .then(() => {
+          closeModal();
+          pollLeaderboard();
+        })
+        .catch((err) => {
+          dom.resetErrorMsg.textContent = err.message;
+          dom.resetErrorMsg.hidden = false;
+        });
+    });
   }
 
-  async function copyPlayUrl() {
-    const url = resolvePlayUrl();
-    let ok = false;
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(url);
-        ok = true;
-      } catch {
-        ok = false;
-      }
-    }
-    if (!ok) {
-      const helper = document.createElement("textarea");
-      helper.value = url;
-      helper.setAttribute("readonly", "");
-      helper.style.position = "fixed";
-      helper.style.left = "-9999px";
-      document.body.appendChild(helper);
-      helper.select();
-      try {
-        ok = document.execCommand("copy");
-      } catch {
-        ok = false;
-      }
-      document.body.removeChild(helper);
-    }
-    el.copyUrlFeedback.hidden = false;
-    el.copyUrlFeedback.textContent = ok ? "已复制参赛链接" : "请手动复制左侧链接";
-    window.setTimeout(() => {
-      el.copyUrlFeedback.hidden = true;
-    }, 2200);
+  // ---------------------------------------------------------------------------
+  // Utilities & Global Listeners
+  // ---------------------------------------------------------------------------
+  function escapeHtml(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
-  function bindEvents() {
-    // 点击任何未揭晓的遮罩块，平滑揭晓
+  function initGlobalEvents() {
+    window.addEventListener("resize", rescaleDeckStage);
+
+    dom.prevSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide - 1));
+    dom.nextSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide + 1));
+    dom.revealAllBtn.addEventListener("click", revealAllInSlide);
+    dom.toggleSidebarBtn.addEventListener("click", () => setSidebarVisible(!state.sidebarVisible));
+
+    dom.fullscreenBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+
+    document.querySelectorAll("[data-goto]").forEach((btn) => {
+      btn.addEventListener("click", () => goToSlide(Number(btn.dataset.goto)));
+    });
+
     document.querySelectorAll("[data-step]").forEach((node) => {
       node.addEventListener("click", () => {
-        revealElement(node);
+        if (node.classList.contains("is-veiled")) revealElement(node);
       });
     });
 
-    el.revealAllBtn.addEventListener("click", revealAllInCurrentSlide);
-
-    // 问题导向线索链接跳转
-    document.querySelectorAll("[data-goto]").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const target = Number(btn.dataset.goto);
-        if (!Number.isNaN(target)) goToSlide(target);
-      });
-    });
-
-    el.prevSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide - 1));
-    el.nextSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide + 1));
-    el.fullscreenBtn.addEventListener("click", toggleFullscreen);
-    document.addEventListener("fullscreenchange", updateFullscreenLabel);
-
-    el.toggleSidebarBtn.addEventListener("click", () => {
-      state.sidebarManualOverride = true;
-      setSidebarVisible(!state.sidebarVisible);
-    });
-
-    el.replayWx1Btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      replayWxKeystrokes();
-    });
-    el.wxStepTabs.forEach((btn, idx) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        state.wxStepIdx = idx;
-        renderWxStep();
-      });
-    });
-
-    el.wtNodes.forEach((node, idx) => {
-      node.addEventListener("click", () => {
-        state.wtStageIdx = idx;
-        renderWtStage();
-      });
-    });
-
-    el.hystSlider.addEventListener("input", (e) => updateHystSimulation(e.target.value));
-    el.hystPresetBtns.forEach((btn) => {
-      btn.addEventListener("click", () => updateHystSimulation(btn.dataset.rate));
-    });
-
-    el.bpeToggleBtn.addEventListener("click", () => {
-      state.bpeShowGood = !state.bpeShowGood;
-      renderBpeToggle();
-    });
-
-    el.bridgeNodes.forEach((node, idx) => {
-      node.addEventListener("click", () => {
-        state.bridgeStageIdx = idx;
-        renderBridgeStage();
-      });
-    });
-
-    el.revealModelsBtn.addEventListener("click", () => {
-      state.revealStep = state.revealStep >= 3 ? 1 : state.revealStep + 1;
-      applyRevealState();
-    });
-
-    // Slide 9 click concealed model column directly to reveal
-    [el.colUserA, el.colUserB].forEach((col, offset) => {
-      col.addEventListener("click", () => {
-        const needed = offset + 2;
-        if (state.revealStep < needed) {
-          state.revealStep = needed;
-          applyRevealState();
-        }
-      });
-    });
-
-    window.addEventListener("keydown", (e) => {
-      if (!el.resetModal.hidden) {
-        if (e.key === "Escape") closeResetModal();
+    document.addEventListener("keydown", (e) => {
+      if (!dom.resetModal.hidden) {
+        if (e.key === "Escape") dom.resetModal.hidden = true;
         return;
       }
-      const tag = document.activeElement?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement && document.activeElement.tagName)) return;
 
-      if (e.key === " ") {
-        e.preventDefault();
-        revealNextInCurrentSlide();
-      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
         goToSlide(state.currentSlide + 1);
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
         goToSlide(state.currentSlide - 1);
-      } else if (e.key >= "1" && e.key <= String(TOTAL_SLIDES)) {
-        goToSlide(Number(e.key) - 1);
+      } else if (e.key === " ") {
+        e.preventDefault();
+        if (!revealNextInSlide()) goToSlide(state.currentSlide + 1);
       } else if (e.key === "b" || e.key === "B") {
-        state.sidebarManualOverride = true;
         setSidebarVisible(!state.sidebarVisible);
       } else if (e.key === "f" || e.key === "F") {
-        toggleFullscreen();
+        dom.fullscreenBtn.click();
       }
     });
-
-    el.wallToggleBtn.addEventListener("click", () => {
-      state.wallPaused = !state.wallPaused;
-      el.wallToggleBtn.textContent = state.wallPaused ? "恢复轮播" : "暂停轮播";
-    });
-    el.wallNextBtn.addEventListener("click", () => {
-      if (state.recentComments.length > 0) {
-        state.spotlightIndex = (state.spotlightIndex + 1) % state.recentComments.length;
-        renderInteractionWall();
-      }
-    });
-
-    el.prevCaseBtn.addEventListener("click", () => {
-      const len = state.compareCases.length;
-      state.currentCaseIndex = (state.currentCaseIndex - 1 + len) % len;
-      renderCompareCases();
-    });
-    el.nextCaseBtn.addEventListener("click", () => {
-      const len = state.compareCases.length;
-      state.currentCaseIndex = (state.currentCaseIndex + 1) % len;
-      renderCompareCases();
-    });
-    el.casesFileInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      try {
-        const parsed = parseCasesPayload(JSON.parse(await file.text()));
-        if (parsed) {
-          state.compareCases = parsed;
-          state.compareSourceLabel = `${file.name} (${parsed.length} 组)`;
-          state.currentCaseIndex = 0;
-          renderCompareCases();
-        }
-      } catch {
-        // ignore invalid file
-      } finally {
-        el.casesFileInput.value = "";
-      }
-    });
-
-    el.copyPlayUrlBtn.addEventListener("click", copyPlayUrl);
-    el.resetTriggerBtn.addEventListener("click", openResetModal);
-    el.resetCloseBtn.addEventListener("click", closeResetModal);
-    el.resetCancelBtn.addEventListener("click", closeResetModal);
-    el.resetModal.addEventListener("click", (e) => {
-      if (e.target === el.resetModal) closeResetModal();
-    });
-    el.resetForm.addEventListener("submit", handleResetSubmit);
   }
 
-  function init() {
-    setSidebarVisible(false);
-    renderQrCode();
-    goToSlide(0);
-    renderWxStep();
-    renderWtStage();
-    renderRuleCompilerDemo();
-    renderInteractionWall();
-    updateHystSimulation(10);
-    renderNoiseSimDemo();
-    renderBpeToggle();
-    renderBridgeStage();
-    renderCompareCases();
-    bindEvents();
+  // Boot
+  initSlide1();
+  initSlide2();
+  initSlide4();
+  initSlide6();
+  initSlide7();
+  initSlide8();
+  initSlide9();
+  initQrAndClipboard();
+  initResetModal();
+  initGlobalEvents();
 
-    loadExternalCasesIfSpecified();
-    fetchLeaderboard();
-
-    window.setInterval(fetchLeaderboard, POLL_INTERVAL_MS);
-    window.setInterval(() => {
-      if (!state.wallPaused && state.recentComments.length > 1) {
-        state.spotlightIndex = (state.spotlightIndex + 1) % state.recentComments.length;
-        renderInteractionWall();
-      }
-    }, WALL_ROTATE_MS);
-  }
-
-  init();
+  goToSlide(0);
+  rescaleDeckStage();
+  pollLeaderboard();
+  state.pollTimer = setInterval(pollLeaderboard, POLL_INTERVAL_MS);
 })();

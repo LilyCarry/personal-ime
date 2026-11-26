@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal-IME | 课堂大屏互动演示与实时排行榜</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2318181b'/%3E%3Ctext x='16' y='21' text-anchor='middle' font-family='monospace' font-size='13' font-weight='bold' fill='%23ffffff'%3EIME%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/stage.css">
+</head>
+<body>
+  <div class="stage-shell">
+    <!-- 左侧 ~65%：极简演示卡片区 -->
+    <main class="stage-left" aria-label="项目演示卡片">
+      <header class="stage-topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">IME</span>
+          <div class="brand-text">
+            <span class="brand-title">Personal-IME</span>
+            <span class="brand-sub">端侧隐私优先的个性化中文输入法实验</span>
+          </div>
+        </div>
+
+        <nav class="slide-tabs" aria-label="演示页切换">
+          <button type="button" class="slide-tab is-active" data-slide="0">
+            <span class="tab-num">01</span>
+            <span class="tab-label">痛点引入</span>
+          </button>
+          <button type="button" class="slide-tab" data-slide="1">
+            <span class="tab-num">02</span>
+            <span class="tab-label">扫码互动</span>
+          </button>
+          <button type="button" class="slide-tab" data-slide="2">
+            <span class="tab-num">03</span>
+            <span class="tab-label">规则自适应</span>
+          </button>
+          <button type="button" class="slide-tab" data-slide="3">
+            <span class="tab-num">04</span>
+            <span class="tab-label">本地 LoRA</span>
+          </button>
+          <button type="button" class="slide-tab" data-slide="4">
+            <span class="tab-num">05</span>
+            <span class="tab-label">寝室实证</span>
+          </button>
+        </nav>
+
+        <div class="topbar-actions">
+          <span id="slide-counter" class="slide-counter mono">1 / 5</span>
+          <button id="fullscreen-btn" type="button" class="util-btn" title="切换全屏演示 (快捷键 F)">
+            全屏演示
+          </button>
+        </div>
+      </header>
+
+      <div class="slides-viewport">
+        <!-- 1. 封面与痛点引入 -->
+        <section id="slide-1" class="slide-card is-active" data-index="0" aria-labelledby="slide-1-title">
+          <div class="slide-head">
+            <span class="eyebrow">01 // COVER &amp; PAIN POINTS</span>
+            <h1 id="slide-1-title" class="slide-title">不改写你的习惯，让输入法学会迁就你</h1>
+            <p class="slide-lead">
+              通用云输入法用海量语料训练“平均人”，但每个人的敲击省键、方言口音与键盘误触都高度个性化。Personal-IME 以<strong>隐私优先、完全本地化</strong>为前提，用规则层 + 端侧小模型打造只懂你一个人的输入法。
+            </p>
+          </div>
+
+          <div class="pain-grid">
+            <article class="pain-card">
+              <div class="pain-badge is-warn">翻车现场 A · 省键与后鼻音截断</div>
+              <div class="pain-demo">
+                <div class="demo-row">
+                  <span class="demo-tag">原始敲击</span>
+                  <code class="mono key-pill">zhon guo</code>
+                  <span class="demo-arrow">-&gt;</span>
+                  <span class="demo-bad">通用词库：众过 / 忠国</span>
+                </div>
+                <div class="demo-row">
+                  <span class="demo-tag">手癖简化</span>
+                  <code class="mono key-pill">wmxqcf</code>
+                  <span class="demo-arrow">-&gt;</span>
+                  <span class="demo-good">期望上屏：我明天去吃饭</span>
+                </div>
+              </div>
+              <p class="pain-note">快打时习惯性省略后鼻音尾键 <code class="mono">g</code> 或只敲声母，通用词库频繁出字错位。</p>
+            </article>
+
+            <article class="pain-card">
+              <div class="pain-badge is-danger">翻车现场 B · 邻键误触与高速换序</div>
+              <div class="pain-demo">
+                <div class="demo-row">
+                  <span class="demo-tag">邻键偏移</span>
+                  <code class="mono key-pill">wishi</code>
+                  <span class="demo-arrow">-&gt;</span>
+                  <span class="demo-bad">传统匹配：卫士（实为我是 woshi）</span>
+                </div>
+                <div class="demo-row">
+                  <span class="demo-tag">左右手倒置</span>
+                  <code class="mono key-pill">hzi / dna</code>
+                  <span class="demo-arrow">-&gt;</span>
+                  <span class="demo-good">真实意图：知 zhi / 但 dan</span>
+                </div>
+              </div>
+              <p class="pain-note">高速盲打时左右手时序错位、机械轴连击或邻键蹭键，往往只能整词退格重打。</p>
+            </article>
+          </div>
+
+          <div class="dual-pillars">
+            <div class="pillar-box">
+              <span class="pillar-tag">隐私底线</span>
+              <strong>数据不出本机，日志自动脱敏</strong>
+              <p>Rime 采集插件直接过滤 4 位以上数字、邮箱与密钥前缀，规则与模型权重全部驻留本地。</p>
+            </div>
+            <div class="pillar-box">
+              <span class="pillar-tag">目标一 · 规则层</span>
+              <strong>量化模糊音 + 日常滑动校准</strong>
+              <p>冷启动识别个人风格，编译为 Rime algebra 规则（如 <code class="mono">ong=on</code>），长期无感微调。</p>
+            </div>
+            <div class="pillar-box">
+              <span class="pillar-tag">目标二 · 神经层</span>
+              <strong>端侧 LoRA + 拼音 Trie 约束</strong>
+              <p>利用个人噪声语料周末本地微调轻量模型，在严格读音约束下直接纠正错拼与简拼。</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. 现场扫码互动屏 -->
+        <section id="slide-2" class="slide-card" data-index="1" hidden aria-labelledby="slide-2-title">
+          <div class="slide-head slide-head-inline">
+            <div>
+              <span class="eyebrow">02 // LIVE INTERACTION WALL</span>
+              <h2 id="slide-2-title" class="slide-title">现场扫码诊断：DeepSeek 趣味点评与规则捕捉</h2>
+              <p class="slide-lead">
+                右侧扫码进入 <code class="mono">/play</code> 完成 3 句拼音竞速，系统即时返回风格称号、趣味点评与可导出的 Rime 规则标签。
+              </p>
+            </div>
+            <div class="live-wall-controls">
+              <span class="live-pill">
+                <span class="live-dot" aria-hidden="true"></span>
+                已捕捉 <strong id="wall-total-count" class="mono">0</strong> 份样本
+              </span>
+              <button id="wall-toggle-btn" type="button" class="btn-outline btn-sm">暂停轮播</button>
+              <button id="wall-next-btn" type="button" class="btn-outline btn-sm">下一条</button>
+            </div>
+          </div>
+
+          <div class="interaction-layout">
+            <div id="spotlight-box" class="spotlight-card">
+              <div class="spotlight-empty">
+                <strong>等待第一位同学扫码完赛...</strong>
+                <p>请使用手机扫描右侧二维码进入 <code class="mono">/play</code>，敲完 3 句拼音即可在大屏实时上墙并生成专属 Rime 配置。</p>
+              </div>
+            </div>
+
+            <div class="feed-panel">
+              <div class="feed-header">
+                <span>最新提交滚动流</span>
+                <span id="wall-carousel-index" class="mono">0 / 0</span>
+              </div>
+              <div id="recent-feed-list" class="recent-feed-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. 目标一原理 -->
+        <section id="slide-3" class="slide-card" data-index="2" hidden aria-labelledby="slide-3-title">
+          <div class="slide-head">
+            <span class="eyebrow">03 // GOAL 1: QUANTIFIED RULES</span>
+            <h2 id="slide-3-title" class="slide-title">目标一原理：风格诊断 -&gt; 量化 Rime 规则 -&gt; 滑动窗口自校准</h2>
+            <p class="slide-lead">
+              将模糊的“打字手癖”拆解为可验证、可开关、可回滚的 24 条标准拼音代数规则，不污染主词库即可即插即用。
+            </p>
+          </div>
+
+          <div class="pipeline-steps">
+            <article class="pipe-card">
+              <div class="pipe-step">STEP 01</div>
+              <h3>初次风格识别（冷启动）</h3>
+              <p>对比标准参考拼音与原始敲击串，定位平翘舌、前后鼻音省尾与邻键换序，再由 DeepSeek 生成趣味诊断与白名单规则建议。</p>
+              <div class="pipe-sample mono">
+                ref: zhong guo ren min<br>
+                raw: zhon guo len ming
+              </div>
+            </article>
+
+            <article class="pipe-card is-accent">
+              <div class="pipe-step">STEP 02</div>
+              <h3>量化为 Rime Algebra 规则</h3>
+              <p>所有建议严格映射至标准规则 ID 白名单，杜绝大模型幻觉造词，一键导出雾凇拼音 <code class="mono">speller/algebra/+</code> 补丁。</p>
+              <pre class="pipe-code mono">patch:
+  speller/algebra/+:
+    - 'derive/ong$/on/'   # ong=on
+    - 'derive/^l/r/'      # l=r
+    - 'derive/^r/l/'</pre>
+            </article>
+
+            <article class="pipe-card">
+              <div class="pipe-step">STEP 03</div>
+              <h3>日常无感切换与画像纠正</h3>
+              <p>日常敲击通过 <code class="mono">ime_logger.lua</code> 脱敏记录命中/回改率；滑动窗口定期评估各规则净收益，低效规则自动降权并轻量提醒。</p>
+              <div class="rule-chips-demo">
+                <span class="rule-chip">ong=on 收益 +14%</span>
+                <span class="rule-chip">l=r 命中 28 次</span>
+                <span class="rule-chip is-muted">g=k 自动休眠</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="principle-footer">
+            <div class="kv-pill">
+              <span class="kv-label">规则词表规模</span>
+              <strong class="mono">24 条标准离散规则</strong>
+            </div>
+            <div class="kv-pill">
+              <span class="kv-label">覆盖维度</span>
+              <strong>声母互通 / 韵母简拼 / 邻键与换序容错</strong>
+            </div>
+            <div class="kv-pill">
+              <span class="kv-label">集成方式</span>
+              <strong>小狼毫 Rime 热部署，零推理延迟</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. 目标二原理 -->
+        <section id="slide-4" class="slide-card" data-index="3" hidden aria-labelledby="slide-4-title">
+          <div class="slide-head">
+            <span class="eyebrow">04 // GOAL 2: LOCAL LORA &amp; TRIE CONSTRAINED DECODING</span>
+            <h2 id="slide-4-title" class="slide-title">目标二原理：Transformer 注意力 + 周末本地 LoRA + 拼音 Trie 约束</h2>
+            <p class="slide-lead">
+              规则层解决已知手癖，神经层负责结合上下文解决“既简拼又误触”的复杂错键，同时以读音 Trie 锁死生成边界。
+            </p>
+          </div>
+
+          <div class="arch-grid">
+            <div class="arch-card">
+              <div class="arch-head">
+                <span class="arch-num">01</span>
+                <h3>真实日志画像 &amp; 噪声模拟器</h3>
+              </div>
+              <p>从历史日志提取省码率、尾音截断与物理邻键分布，对通用对话语料注入可控噪声，合成贴合个人分布的 <code class="mono">(context, raw_keys) -&gt; target</code> 训练集。</p>
+              <div class="arch-meta mono">profiler/noise_simulator.py</div>
+            </div>
+
+            <div class="arch-card">
+              <div class="arch-head">
+                <span class="arch-num">02</span>
+                <h3>周末本地 LoRA / 29M 双路线</h3>
+              </div>
+              <p>利用个人 PC 空闲时间对 <strong>Qwen3-0.6B-Base</strong> 进行单字母分词 LoRA 后训练，另备 <strong>~29M 字级 Transformer</strong> 支持 CPU INT8 低延迟端侧推理。</p>
+              <div class="arch-meta mono">model/train_qwen3_lora.py · train_mobile_small.py</div>
+            </div>
+
+            <div class="arch-card">
+              <div class="arch-head">
+                <span class="arch-num">03</span>
+                <h3>拼音 Trie + 邻键容错 Beam Search</h3>
+              </div>
+              <p>解码时基于 8105 汉字读音构建词表 Trie，仅放行“精确匹配 + 允许的邻键替换/换序/截断”路径，既容错又彻底杜绝语义漂移乱造字。</p>
+              <div class="arch-meta mono">model/eval_qwen3_constrained.py</div>
+            </div>
+
+            <div class="arch-card">
+              <div class="arch-head">
+                <span class="arch-num">04</span>
+                <h3>Rime C 桥接低延迟注入</h3>
+              </div>
+              <p>Windows 小狼毫通过 <code class="mono">ime_bridge.c</code> + <code class="mono">ai_filter.lua</code> 与本地 <code class="mono">127.0.0.1:18765</code> TCP 推理服务通信，异常时平滑回落原生候选。</p>
+              <div class="arch-meta mono">rime/bridge/ime_bridge.c · ai_filter.lua</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. 寝室小范围实证对比卡片 -->
+        <section id="slide-5" class="slide-card" data-index="4" hidden aria-labelledby="slide-5-title">
+          <div class="slide-head slide-head-inline">
+            <div>
+              <span class="eyebrow">05 // DORM A/B EMPIRICAL COMPARISON</span>
+              <h2 id="slide-5-title" class="slide-title">寝室实证对比：同一错拼输入，在三套模型上的差异输出</h2>
+              <p class="slide-lead">
+                用本人与室友两份截然不同的敲击/用词习惯分别后训练 LoRA，直观验证“个性模型比通用底座更懂主人”。
+              </p>
+            </div>
+            <div class="case-toolbar">
+              <span id="cases-source-badge" class="source-pill">内置实证案例 (8 组)</span>
+              <label class="btn-outline btn-sm file-upload-label" title="导入 docs/cases_compare.json">
+                导入 JSON
+                <input id="cases-file-input" type="file" accept=".json,application/json" hidden>
+              </label>
+            </div>
+          </div>
+
+          <div id="case-selector" class="case-selector" role="tablist" aria-label="对比案例选择"></div>
+
+          <div class="compare-stage">
+            <div class="compare-input-bar">
+              <div class="compare-field">
+                <span class="compare-label">上文语境 Context</span>
+                <strong id="case-context" class="compare-value">--</strong>
+              </div>
+              <div class="compare-field">
+                <span class="compare-label">原始按键 Raw Keys</span>
+                <code id="case-raw-keys" class="compare-keys mono">--</code>
+              </div>
+              <div class="compare-nav-btns">
+                <button id="prev-case-btn" type="button" class="btn-outline btn-sm">上一组</button>
+                <button id="next-case-btn" type="button" class="btn-outline btn-sm">下一组</button>
+              </div>
+            </div>
+
+            <div class="compare-columns">
+              <article class="model-col is-base">
+                <div class="model-col-head">
+                  <span class="model-badge">通用底座</span>
+                  <span class="model-sub">未经过个人习惯微调</span>
+                </div>
+                <div id="case-base-pred" class="model-pred-body"></div>
+              </article>
+
+              <article class="model-col is-user-a">
+                <div class="model-col-head">
+                  <span class="model-badge">本人专属模型</span>
+                  <span class="model-sub">后鼻音省 g / 工科高频简拼</span>
+                </div>
+                <div id="case-user-a-pred" class="model-pred-body"></div>
+              </article>
+
+              <article class="model-col is-user-b">
+                <div class="model-col-head">
+                  <span class="model-badge">室友专属模型</span>
+                  <span class="model-sub">l/n 混用 / 生活娱乐用词偏好</span>
+                </div>
+                <div id="case-user-b-pred" class="model-pred-body"></div>
+              </article>
+            </div>
+
+            <div class="compare-note-box">
+              <span class="note-tag">差异归因</span>
+              <p id="case-note">--</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="stage-footer">
+        <div class="footer-hints">
+          <span class="kbd-hint"><kbd>←</kbd> <kbd>→</kbd> 翻页</span>
+          <span class="kbd-hint"><kbd>1</kbd>-<kbd>5</kbd> 直达卡片</span>
+          <span class="kbd-hint"><kbd>F</kbd> 全屏</span>
+        </div>
+
+        <div class="slide-dots" id="slide-dots" aria-label="幻灯片进度指示"></div>
+
+        <div class="slide-nav-btns">
+          <button id="prev-slide-btn" type="button" class="nav-btn">上一页</button>
+          <button id="next-slide-btn" type="button" class="nav-btn is-primary">下一页</button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- 右侧 ~35%：常驻扫码二维码 + 实时竞速排行榜 -->
+    <aside class="stage-right" aria-label="扫码参赛与实时排行榜">
+      <section class="qr-card">
+        <div class="qr-box" id="qr-canvas-wrap" aria-label="扫码进入 /play 二维码"></div>
+        <div class="qr-info">
+          <span class="qr-eyebrow">SCAN TO JOIN // 现场扫码竞速</span>
+          <h2 class="qr-heading">手机扫码测出你的手癖</h2>
+          <p class="qr-desc">无需安装 App，英文 26 键直打 3 句拼音，即刻上榜并领取 Rime 配置。</p>
+          <div class="qr-url-row">
+            <a id="play-url-link" class="qr-url mono" href="/play" target="_blank" rel="noopener">/play</a>
+            <button id="copy-play-url-btn" type="button" class="btn-outline btn-xs">复制地址</button>
+          </div>
+          <span id="copy-url-feedback" class="copy-url-feedback" hidden>已复制链接</span>
+        </div>
+      </section>
+
+      <section class="leaderboard-card">
+        <header class="lb-header">
+          <div class="lb-title-group">
+            <h2>实时打字竞速榜</h2>
+            <span id="lb-live-status" class="lb-status">
+              <span class="live-dot" aria-hidden="true"></span>
+              2s 同步中
+            </span>
+          </div>
+          <div class="lb-meta-right">
+            <span id="lb-total-badge" class="lb-total mono">0 人完赛</span>
+          </div>
+        </header>
+
+        <div id="leaderboard-list" class="leaderboard-list" aria-live="polite">
+          <div class="lb-empty">正在连接排行榜服务...</div>
+        </div>
+
+        <footer class="lb-footer">
+          <span class="lb-formula">综合分 = 键速(CPM) × 精准度(%)</span>
+          <button id="reset-trigger-btn" type="button" class="corner-reset-btn" title="管理员清榜">
+            清榜
+          </button>
+        </footer>
+      </section>
+    </aside>
+  </div>
+
+  <!-- 角落清榜口令弹窗 -->
+  <div id="reset-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="reset-modal-title">清空实时排行榜</h3>
+        <button id="reset-close-btn" type="button" class="modal-close" aria-label="关闭">&times;</button>
+      </div>
+      <p class="modal-desc">请输入服务端配置的管理员口令（<code class="mono">ADMIN_TOKEN</code>），确认后将清空当前所有竞速记录。</p>
+      <form id="reset-form" class="modal-form">
+        <input
+          id="reset-token-input"
+          type="password"
+          class="modal-input"
+          placeholder="输入 ADMIN_TOKEN 口令"
+          autocomplete="off"
+          required
+        >
+        <p id="reset-feedback" class="modal-feedback" hidden role="status"></p>
+        <div class="modal-actions">
+          <button id="reset-cancel-btn" type="button" class="btn-outline">取消</button>
+          <button id="reset-confirm-btn" type="submit" class="btn-danger">确认清榜</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/stage.js"></script>
+</body>
+</html>

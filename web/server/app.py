@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 import os
 import secrets
 from pathlib import Path
@@ -11,10 +12,50 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
+from profiler.rules_schema import export_catalog
+from web.server.deepseek_client import analyze_typing_style
 from web.server.storage import LeaderboardStorage
 
 DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
+
+
+class AnalyzeRequest(BaseModel):
+    """Request payload for POST /api/analyze."""
+
+    nickname: str = Field(..., min_length=1, max_length=64)
+    target_text: str = Field(..., min_length=1)
+    typed_input: str = Field(...)
+    duration_sec: float = Field(..., gt=0)
+    target_pinyin: str = ""
+    backspaces: int = Field(default=0, ge=0)
+    cpm: float | None = None
+    accuracy: float | None = None
+    score: float | None = None
+
+
+def _compute_metrics(payload: AnalyzeRequest) -> tuple[float, float, float]:
+    """Compute or clamp cpm, accuracy, and composite score."""
+    if payload.cpm is not None:
+        cpm = round(max(0.0, float(payload.cpm)), 1)
+    else:
+        char_count = len(payload.target_text.strip()) or len(payload.typed_input.strip())
+        cpm = round(char_count / (max(float(payload.duration_sec), 0.1) / 60.0), 1)
+
+    if payload.accuracy is not None:
+        accuracy = round(min(100.0, max(0.0, float(payload.accuracy))), 1)
+    else:
+        reference = payload.target_pinyin.strip().lower() or payload.target_text.strip().lower()
+        typed = payload.typed_input.strip().lower()
+        ratio = SequenceMatcher(None, reference, typed).ratio() if reference else 0.0
+        accuracy = round(min(100.0, max(0.0, ratio * 100.0)), 1)
+
+    if payload.score is not None:
+        score = round(max(0.0, float(payload.score)), 1)
+    else:
+        score = round(cpm * (accuracy / 100.0), 1)
+    return cpm, accuracy, score
 
 
 def _parse_cors_origins() -> list[str]:
@@ -58,6 +99,39 @@ def create_app(
         limit: int = Query(default=30, ge=1, le=200),
     ) -> dict[str, Any]:
         return storage.get_leaderboard(limit=limit, recent_limit=10)
+
+    @app.get("/api/rules/catalog")
+    def get_rules_catalog() -> list[dict[str, Any]]:
+        return export_catalog()
+
+    @app.post("/api/analyze")
+    def analyze_race(payload: AnalyzeRequest) -> dict[str, Any]:
+        cpm, accuracy, score = _compute_metrics(payload)
+        analysis = analyze_typing_style(
+            target_text=payload.target_text,
+            target_pinyin=payload.target_pinyin,
+            typed_input=payload.typed_input,
+            duration_sec=payload.duration_sec,
+            cpm=cpm,
+            accuracy=accuracy,
+            backspaces=payload.backspaces,
+        )
+        record = storage.add_record(
+            nickname=payload.nickname,
+            cpm=cpm,
+            accuracy=accuracy,
+            score=score,
+            title=analysis.title,
+            comment=analysis.comment,
+            rules=analysis.rules,
+        )
+        return {
+            "record": record,
+            "rank": int(record.get("rank", 1)),
+            "rime_yaml": analysis.rime_yaml,
+            "rule_reasons": analysis.rule_reasons,
+            "fallback": analysis.fallback,
+        }
 
     @app.post("/api/reset")
     def reset_leaderboard(

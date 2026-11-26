@@ -347,9 +347,6 @@
     return { createSvg };
   })();
 
-  /**
-   * 卡片 3 交互式规则编译器示例（对齐 profiler/rules_schema.py）
-   */
   const RULE_COMPILER_DEMOS = [
     {
       id: "ong=on",
@@ -398,9 +395,6 @@
     },
   ];
 
-  /**
-   * 卡片 5 噪声模拟器演化示例（对齐 profiler/noise_simulator.py）
-   */
   const NOISE_SIM_DEMOS = [
     {
       label: "我明天去吃饭",
@@ -440,9 +434,6 @@
     },
   ];
 
-  /**
-   * 卡片 7 寝室实证对比默认数据（对齐 Issue #7 docs/cases_compare.json）
-   */
   const BUILTIN_COMPARE_CASES = [
     {
       context: "快到饭点了，",
@@ -511,11 +502,14 @@
   ];
 
   const TOTAL_SLIDES = 8;
+  const INTERACTIVE_SLIDE_INDEX = 3; // 第 4 页「现场互动」默认自动展开右侧榜单
   const POLL_INTERVAL_MS = 2000;
   const WALL_ROTATE_MS = 4500;
 
   const state = {
     currentSlide: 0,
+    sidebarVisible: false, // 一开始不出现右侧榜单
+    sidebarManualOverride: false,
     totalCount: 0,
     leaderboard: [],
     recentComments: [],
@@ -529,6 +523,9 @@
   };
 
   const el = {
+    stageShell: document.getElementById("stage-shell"),
+    stageRight: document.getElementById("stage-right"),
+    toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
     slideCards: Array.from(document.querySelectorAll(".slide-card")),
     slideTabs: Array.from(document.querySelectorAll(".slide-tab")),
     slideCounter: document.getElementById("slide-counter"),
@@ -537,7 +534,10 @@
     nextSlideBtn: document.getElementById("next-slide-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
 
-    // Slide 2
+    // Slide 1 image slots
+    slotInputs: Array.from(document.querySelectorAll(".slot-file-input")),
+
+    // Slide 4 (live interaction wall)
     wallTotalCount: document.getElementById("wall-total-count"),
     wallToggleBtn: document.getElementById("wall-toggle-btn"),
     wallNextBtn: document.getElementById("wall-next-btn"),
@@ -553,11 +553,11 @@
     compilerDesc: document.getElementById("compiler-desc"),
     compilerYaml: document.getElementById("compiler-yaml"),
 
-    // Slide 5 interactive noise simulator
+    // Slide 6 interactive noise simulator
     simTabs: document.getElementById("sim-tabs"),
     simPipelineView: document.getElementById("sim-pipeline-view"),
 
-    // Slide 7 compare cases
+    // Slide 8 compare cases
     casesSourceBadge: document.getElementById("cases-source-badge"),
     casesFileInput: document.getElementById("cases-file-input"),
     caseSelector: document.getElementById("case-selector"),
@@ -588,6 +588,14 @@
     resetTokenInput: document.getElementById("reset-token-input"),
     resetFeedback: document.getElementById("reset-feedback"),
   };
+
+  function setSidebarVisible(visible) {
+    state.sidebarVisible = Boolean(visible);
+    el.stageRight.hidden = !state.sidebarVisible;
+    el.stageShell.classList.toggle("is-sidebar-hidden", !state.sidebarVisible);
+    el.toggleSidebarBtn.classList.toggle("is-active", state.sidebarVisible);
+    el.toggleSidebarBtn.textContent = state.sidebarVisible ? "隐藏榜单" : "显示榜单";
+  }
 
   function resolvePlayUrl() {
     const origin = window.location.origin;
@@ -652,9 +660,14 @@
     el.prevSlideBtn.disabled = target === 0;
     el.nextSlideBtn.disabled = target === TOTAL_SLIDES - 1;
     renderSlideDots();
+
+    // 当首次切入「现场互动」页时自动呼出右侧二维码与排行榜（若用户未手动关闭过）
+    if (!state.sidebarManualOverride && target === INTERACTIVE_SLIDE_INDEX && !state.sidebarVisible) {
+      setSidebarVisible(true);
+    }
   }
 
-  // ---- Slide 2: Interaction Wall ----
+  // ---- Slide 4: Interaction Wall ----
   function renderInteractionWall() {
     const items = state.recentComments;
     el.wallTotalCount.textContent = String(state.totalCount);
@@ -789,7 +802,7 @@
     el.compilerYaml.textContent = yamlLines.join("\n");
   }
 
-  // ---- Slide 5: Interactive Noise Simulator ----
+  // ---- Slide 6: Interactive Noise Simulator ----
   function renderNoiseSimDemo() {
     el.simTabs.innerHTML = "";
     NOISE_SIM_DEMOS.forEach((item, idx) => {
@@ -813,7 +826,7 @@
     });
   }
 
-  // ---- Slide 7: Dorm Compare Cases ----
+  // ---- Slide 8: Dorm Compare Cases ----
   function normalizePredList(pred) {
     if (Array.isArray(pred)) {
       return pred.slice(0, 3).map((item) => {
@@ -904,7 +917,7 @@
         renderCompareCases();
       }
     } catch {
-      // 保留内置数据
+      // keep builtin cases
     }
   }
 
@@ -1106,6 +1119,27 @@
     el.fullscreenBtn.addEventListener("click", toggleFullscreen);
     document.addEventListener("fullscreenchange", updateFullscreenLabel);
 
+    el.toggleSidebarBtn.addEventListener("click", () => {
+      state.sidebarManualOverride = true;
+      setSidebarVisible(!state.sidebarVisible);
+    });
+
+    // Slide 1 placeholder local image preview
+    el.slotInputs.forEach((input) => {
+      input.addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const target = input.dataset.target;
+        const imgEl = document.getElementById(`img-${target}`);
+        const placeholderEl = document.getElementById(`placeholder-${target}`);
+        if (imgEl && placeholderEl) {
+          imgEl.src = URL.createObjectURL(file);
+          imgEl.hidden = false;
+          placeholderEl.hidden = true;
+        }
+      });
+    });
+
     window.addEventListener("keydown", (e) => {
       if (!el.resetModal.hidden) {
         if (e.key === "Escape") closeResetModal();
@@ -1122,6 +1156,9 @@
         goToSlide(state.currentSlide - 1);
       } else if (e.key >= "1" && e.key <= String(TOTAL_SLIDES)) {
         goToSlide(Number(e.key) - 1);
+      } else if (e.key === "b" || e.key === "B") {
+        state.sidebarManualOverride = true;
+        setSidebarVisible(!state.sidebarVisible);
       } else if (e.key === "f" || e.key === "F") {
         toggleFullscreen();
       }
@@ -1177,6 +1214,7 @@
   }
 
   function init() {
+    setSidebarVisible(false);
     renderQrCode();
     goToSlide(0);
     renderRuleCompilerDemo();

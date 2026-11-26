@@ -18,6 +18,8 @@
   --success: #15803d;
   --success-soft: #f0fdf4;
   --gold-soft: #fefce8;
+  --wx-bg: #1e2024;
+  --wx-green: #07c160;
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
@@ -153,14 +155,14 @@ body {
 .slide-tab {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 4px 7px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink-muted);
   font-family: inherit;
-  font-size: clamp(10.5px, 0.78vw, 12px);
+  font-size: clamp(10px, 0.74vw, 12px);
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -253,8 +255,8 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: clamp(10px, 1.3vh, 16px);
-  padding: clamp(12px, 1.6vh, 24px) clamp(16px, 2vw, 32px);
+  gap: clamp(9px, 1.2vh, 15px);
+  padding: clamp(12px, 1.5vh, 22px) clamp(16px, 1.9vw, 30px);
   overflow-y: auto;
 }
 
@@ -289,14 +291,14 @@ body {
 
 .slide-title {
   margin: 0 0 4px;
-  font-size: clamp(18px, 1.75vw, 28px);
+  font-size: clamp(18px, 1.7vw, 27px);
   line-height: 1.22;
   letter-spacing: -0.02em;
 }
 
 .slide-lead {
   margin: 0;
-  font-size: clamp(12px, 0.95vw, 14.5px);
+  font-size: clamp(12px, 0.94vw, 14.5px);
   color: var(--ink-muted);
   max-width: 92ch;
 }
@@ -331,7 +333,7 @@ body {
 
 .panel-box h3 {
   margin: 0;
-  font-size: clamp(13.5px, 1.05vw, 16px);
+  font-size: clamp(13.5px, 1.04vw, 16px);
 }
 
 .panel-title-row {
@@ -364,78 +366,159 @@ body {
   border-color: #fecaca;
 }
 
-/* Slide 1: 图片占位槽 & 痛点列表 */
-.img-slot {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px dashed #93c5fd;
-  border-radius: var(--radius-md);
-  background: #ffffff;
-  padding: 14px;
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-
-.img-slot:hover {
-  border-color: var(--accent);
-  background: #f8fbff;
-}
-
-.img-slot.is-compact {
-  min-height: 110px;
-}
-
-.slot-img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: var(--radius-sm);
-}
-
-.slot-placeholder {
-  text-align: center;
+/* Slide 1: 微信输入法实测仿真候选条 */
+.wechat-demos {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  max-width: 44ch;
+  justify-content: center;
+  gap: clamp(8px, 1vh, 12px);
+  flex: 1;
 }
 
-.slot-badge {
+.wx-case {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: clamp(8px, 0.9vh, 11px) 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.wx-input-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wx-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.wx-tag.is-blue {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.wx-tag.is-green {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.wx-progress-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: clamp(9px, 1vh, 13px) 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1.5px solid #bfdbfe;
+}
+
+.wx-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wx-step-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wx-step-pill {
   font-size: 10.5px;
   font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
 }
 
-.slot-placeholder strong {
-  font-size: clamp(13px, 1vw, 15px);
-  color: var(--ink);
+.wx-step-pill.is-miss {
+  background: var(--warn-soft);
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 
-.slot-placeholder p {
-  margin: 0;
-  font-size: clamp(11px, 0.84vw, 12.5px);
+.wx-step-pill.is-hit {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid #bbf7d0;
+}
+
+.wx-progress-arrow {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  padding-left: 4px;
+}
+
+.wx-cand.is-miss {
+  background: #52525b;
+  color: #fde68a;
+  font-weight: 700;
+}
+
+.wx-keys,
+code.wx-keys {
+  background: #27272a;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: clamp(12px, 0.9vw, 13.5px);
+  font-weight: 700;
+}
+
+.wx-hint {
+  margin-left: auto;
+  font-size: 11px;
   color: var(--ink-soft);
 }
 
-.pain-points-compact {
+.wx-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--wx-bg);
+  color: #d4d4d8;
+  font-size: clamp(12.5px, 0.95vw, 14px);
+}
+
+.wx-cand {
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.wx-cand.is-top1 {
+  background: var(--wx-green);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.pain-points-list {
   display: flex;
   flex-direction: column;
-  gap: clamp(6px, 0.75vh, 9px);
+  gap: clamp(8px, 1vh, 12px);
+  flex: 1;
+  justify-content: center;
 }
 
 .pain-row {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: clamp(7px, 0.85vh, 10px) 11px;
+  padding: clamp(9px, 1vh, 13px) 12px;
   border-radius: var(--radius-sm);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -459,17 +542,202 @@ body {
 
 .pain-row strong {
   display: block;
-  font-size: clamp(12.5px, 0.94vw, 14px);
-  margin-bottom: 1px;
+  font-size: clamp(12.5px, 0.96vw, 14.5px);
+  margin-bottom: 2px;
 }
 
 .pain-row p {
   margin: 0;
-  font-size: clamp(11px, 0.84vw, 12.5px);
+  font-size: clamp(11.5px, 0.86vw, 13px);
   color: var(--ink-muted);
 }
 
-/* Slide 2: 四大亮点 2x2 网格 */
+.next-cue {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+
+.next-cue span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.next-cue p {
+  margin: 0;
+  font-size: clamp(11.5px, 0.86vw, 12.8px);
+}
+
+/* Slide 2: 竞品原理 4 步结构 */
+.noisy-formula {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: #18181b;
+  color: #93c5fd;
+  font-size: clamp(11.5px, 0.9vw, 13.5px);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.wetype-pipeline {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(8px, 1vw, 14px);
+}
+
+.wt-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: clamp(10px, 1.2vh, 16px) clamp(10px, 1vw, 14px);
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface-soft);
+  min-height: 0;
+}
+
+.wt-col.is-accent {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.wt-col.is-warn {
+  border-color: #fde68a;
+  background: #fffdf5;
+}
+
+.wt-step {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.wt-col h3 {
+  margin: 0;
+  font-size: clamp(13.5px, 1.02vw, 16px);
+}
+
+.wt-items {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  justify-content: center;
+}
+
+.wt-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: clamp(11px, 0.82vw, 12.2px);
+}
+
+.wt-box code {
+  font-weight: 700;
+  color: var(--ink);
+  font-size: clamp(11.5px, 0.85vw, 12.5px);
+}
+
+.wt-box span {
+  color: var(--ink-muted);
+}
+
+.wt-box.is-good {
+  border-left: 3px solid var(--success);
+  background: var(--success-soft);
+}
+
+.wt-box.is-bad {
+  border-left: 3px solid var(--danger);
+  background: var(--danger-soft);
+}
+
+.wt-box.is-cloud {
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+}
+
+.wt-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.wt-ms {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.wt-cand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: clamp(12px, 0.9vw, 13.5px);
+}
+
+.wt-cand.is-top1 {
+  background: var(--wx-bg);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.wt-cand.is-top1 small {
+  color: var(--wx-green);
+}
+
+.wt-cand small {
+  font-size: 10.5px;
+  color: var(--ink-soft);
+}
+
+.wt-foot {
+  margin: 0;
+  font-size: clamp(10.5px, 0.8vw, 11.8px);
+  color: var(--ink-soft);
+}
+
+.wt-limitation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  border: 1px solid #fecaca;
+  font-size: clamp(11px, 0.84vw, 12.5px);
+  color: #7f1d1d;
+  flex-shrink: 0;
+}
+
+.wt-lim-title {
+  font-weight: 800;
+  color: var(--danger);
+}
+
+/* Slide 3: 四大亮点 2x2 网格 */
 .highlights-grid {
   flex: 1;
   min-height: 0;
@@ -552,7 +820,7 @@ body {
   align-self: flex-start;
 }
 
-/* Slide 4: 现场互动墙 */
+/* Slide 5: 现场互动墙 */
 .live-wall-controls {
   display: flex;
   align-items: center;
@@ -774,7 +1042,7 @@ body {
   font-weight: 500;
 }
 
-/* Slide 3 & 5: 纵向步骤流 & 规则编译器 */
+/* Slide 4 & 6: 纵向步骤流 & 规则编译器 */
 .flow-steps-vertical {
   display: flex;
   flex-direction: column;
@@ -884,7 +1152,7 @@ body {
   overflow-x: auto;
 }
 
-/* Slide 5: 滑窗状态机 SVG */
+/* Slide 6: 滑窗状态机 SVG */
 .small-note {
   margin: 0;
   font-size: clamp(11.5px, 0.86vw, 13px);
@@ -929,7 +1197,7 @@ body {
   color: var(--ink-soft);
 }
 
-/* Slide 6: 噪声模拟 & 单字母分词 */
+/* Slide 7: 噪声模拟 & 单字母分词 */
 .noise-layers {
   display: flex;
   flex-direction: column;
@@ -1066,7 +1334,7 @@ body {
   color: var(--ink-muted);
 }
 
-/* Slide 7: Trie 架构与惩罚表 */
+/* Slide 8: Trie 架构与惩罚表 */
 .arch-flow-box {
   padding: clamp(6px, 0.8vh, 10px) 10px;
   border-radius: var(--radius-md);
@@ -1117,7 +1385,7 @@ body {
   color: var(--ink-muted);
 }
 
-/* Slide 8: 寝室实证对比 */
+/* Slide 9: 寝室实证对比 */
 .case-toolbar {
   display: flex;
   align-items: center;
@@ -1813,7 +2081,16 @@ code.compare-keys {
   }
 
   .slide-tab {
-    padding: 4px 6px;
+    padding: 3px 5px;
+    font-size: 10.5px;
+  }
+
+  .stage-shell:not(.is-sidebar-hidden) .slide-tab:not(.is-active) .tab-label {
+    display: none;
+  }
+
+  .stage-shell:not(.is-sidebar-hidden) .slide-tab:not(.is-active) .tab-num {
+    opacity: 1;
   }
 }
 
@@ -1824,25 +2101,36 @@ code.compare-keys {
   }
 
   .slide-card {
-    padding: 10px 14px;
-    gap: 8px;
+    padding: 9px 14px;
+    gap: 7px;
   }
 
   .slide-title {
-    font-size: clamp(16px, 1.5vw, 21px);
+    font-size: clamp(16px, 1.48vw, 21px);
   }
 
   .panel-box {
-    padding: 9px 11px;
+    padding: 8px 11px;
     gap: 6px;
   }
 
+  .wx-case,
   .pain-row,
   .v-step,
   .noise-layer,
   .bpe-box,
   .route-card {
-    padding: 6px 9px;
+    padding: 5px 9px;
+  }
+
+  .wt-col {
+    padding: 8px 10px;
+    gap: 5px;
+  }
+
+  .wt-box,
+  .wt-cand {
+    padding: 5px 8px;
   }
 
   .highlight-card {
@@ -1871,6 +2159,7 @@ code.compare-keys {
   }
 
   .motivation-grid,
+  .wetype-pipeline,
   .highlights-grid,
   .two-col-grid,
   .goal1-grid,

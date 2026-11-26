@@ -9,7 +9,7 @@
 </head>
 <body>
   <div id="stage-shell" class="stage-shell is-sidebar-hidden">
-    <!-- 左侧主演示区（默认全宽居中，进入互动环节或手动开启后让位右侧 ~35% 榜单） -->
+    <!-- 左侧主演示区（默认全宽；进入第 5 页互动或手动开启后展开右侧 ~35% 榜单） -->
     <main class="stage-left" aria-label="项目演示卡片">
       <header class="stage-topbar">
         <div class="brand">
@@ -22,33 +22,36 @@
 
         <nav class="slide-tabs" aria-label="演示页切换">
           <button type="button" class="slide-tab is-active" data-slide="0">
-            <span class="tab-num">01</span><span class="tab-label">为什么做</span>
+            <span class="tab-num">01</span><span class="tab-label">缘起</span>
           </button>
           <button type="button" class="slide-tab" data-slide="1">
-            <span class="tab-num">02</span><span class="tab-label">四大亮点</span>
+            <span class="tab-num">02</span><span class="tab-label">竞品原理</span>
           </button>
           <button type="button" class="slide-tab" data-slide="2">
-            <span class="tab-num">03</span><span class="tab-label">开局规则</span>
+            <span class="tab-num">03</span><span class="tab-label">四大亮点</span>
           </button>
           <button type="button" class="slide-tab" data-slide="3">
-            <span class="tab-num">04</span><span class="tab-label">现场互动</span>
+            <span class="tab-num">04</span><span class="tab-label">开局规则</span>
           </button>
           <button type="button" class="slide-tab" data-slide="4">
-            <span class="tab-num">05</span><span class="tab-label">智能切换</span>
+            <span class="tab-num">05</span><span class="tab-label">现场互动</span>
           </button>
           <button type="button" class="slide-tab" data-slide="5">
-            <span class="tab-num">06</span><span class="tab-label">噪声与模型</span>
+            <span class="tab-num">06</span><span class="tab-label">智能切换</span>
           </button>
           <button type="button" class="slide-tab" data-slide="6">
-            <span class="tab-num">07</span><span class="tab-label">Trie解码</span>
+            <span class="tab-num">07</span><span class="tab-label">小模型</span>
           </button>
           <button type="button" class="slide-tab" data-slide="7">
-            <span class="tab-num">08</span><span class="tab-label">寝室实证</span>
+            <span class="tab-num">08</span><span class="tab-label">Trie解码</span>
+          </button>
+          <button type="button" class="slide-tab" data-slide="8">
+            <span class="tab-num">09</span><span class="tab-label">寝室实证</span>
           </button>
         </nav>
 
         <div class="topbar-actions">
-          <span id="slide-counter" class="slide-counter mono">1 / 8</span>
+          <span id="slide-counter" class="slide-counter mono">1 / 9</span>
           <button id="toggle-sidebar-btn" type="button" class="util-btn" title="显示/隐藏右侧扫码与排行榜 (快捷键 B)">
             显示榜单
           </button>
@@ -59,89 +62,219 @@
       </header>
 
       <div class="slides-viewport">
-        <!-- 01. 为什么做：微信输入法很舒服，但隐私敏感 / 呆板时间换空间 / 定制化低 -->
+        <!-- 01. 为什么做：微信输入法的顺手实测示例 + 三大痛点 -->
         <section id="slide-1" class="slide-card is-active" data-index="0" aria-labelledby="slide-1-title">
           <div class="slide-head">
-            <span class="eyebrow">01 // MOTIVATION · 为什么还要重做一个输入法？</span>
-            <h1 id="slide-1-title" class="slide-title">微信输入法确实好用，但输入法这件事，我们想自己掌控</h1>
+            <span class="eyebrow">01 // MOTIVATION · 体验起点与痛点</span>
+            <h1 id="slide-1-title" class="slide-title">微信输入法确实很舒服，但输入法这件事，我们想自己掌控</h1>
             <p class="slide-lead">
-              日常用微信输入法很顺手，它的长句与模糊预测足够聪明；但越高频使用越发现三个绕不开的瓶颈：<strong>隐私敏感、策略呆板（时间换空间）、几乎无法按个人手癖深度定制。</strong>
+              日常使用微信输入法，即便随手敲出一串简拼，它也能顺着语境猜出整句；但正因为输入法最懂你在想什么，闭源商业方案的三大短板才更显棘手。
             </p>
           </div>
 
           <div class="motivation-grid">
-            <!-- 左卡片：正面肯定（微信输入法很舒服 + 实拍图占位 1） -->
+            <!-- 左侧：微信输入法真实手打测试示例（还原自实测截图） -->
             <article class="panel-box is-soft">
               <div class="panel-title-row">
-                <h3>体验起点：微信输入法的预测确实很舒服</h3>
-                <span class="mini-badge">聪明但不属于你</span>
+                <h3>实测体验：重度简拼下，它的预测确实很聪明</h3>
+                <span class="mini-badge">微信输入法真实案例</span>
               </div>
-              <p class="small-note">
-                即便随手连敲或少打几个键，微信输入法也能顺着语境猜出你想说的话——这是我们真正欣赏的“智能感”。
-              </p>
 
-              <label class="img-slot" title="点击可临时选择本地图片预览">
-                <img id="img-wechat-predict" class="slot-img" hidden alt="微信输入法智能预测示例">
-                <div id="placeholder-wechat-predict" class="slot-placeholder">
-                  <span class="slot-badge mono">IMAGE SLOT 01 // 待插入图片</span>
-                  <strong>微信输入法实拍：我的按键与它的智能预测</strong>
-                  <p>展示简拼/错拼下依然精准上屏的体验（提供图片后替换，或点击此处本地选图预览）</p>
+              <div class="wechat-demos">
+                <div class="wx-case">
+                  <div class="wx-input-line">
+                    <span class="wx-tag is-blue">案例 1 · 个人语言习惯</span>
+                    <code class="mono wx-keys">ni'ge'c'l'l</code>
+                    <span class="wx-hint">命中专属口癖，而非泛用词语</span>
+                  </div>
+                  <div class="wx-bar">
+                    <span class="wx-cand is-top1">1 你个臭乐乐</span>
+                    <span class="wx-cand">2 你哥出来了</span>
+                    <span class="wx-cand">3 你个出来了</span>
+                  </div>
                 </div>
-                <input class="slot-file-input" data-target="wechat-predict" type="file" accept="image/*" hidden>
-              </label>
+
+                <div class="wx-progress-card">
+                  <div class="wx-progress-head">
+                    <span class="wx-tag is-green">案例 2 · 自造句渐进记忆与省键</span>
+                    <span class="wx-hint">同一自造句「签到了快起床」两次输入对比</span>
+                  </div>
+
+                  <div class="wx-step-block">
+                    <div class="wx-input-line">
+                      <span class="wx-step-pill is-miss">第 1 次打（效果不如意）</span>
+                      <code class="mono wx-keys">qian'd'l'kuai'q'c</code>
+                    </div>
+                    <div class="wx-bar">
+                      <span class="wx-cand is-miss">1 钱多了快去吃</span>
+                      <span class="wx-cand">2 钱到了快去吃</span>
+                      <span class="wx-cand">3 前端</span>
+                      <span class="wx-cand">4 签到</span>
+                    </div>
+                  </div>
+
+                  <div class="wx-progress-arrow">
+                    手动纠正上屏一次后，第 2 次打甚至把 <code class="mono">kuai</code> 省成 <code class="mono">k</code>：
+                  </div>
+
+                  <div class="wx-step-block">
+                    <div class="wx-input-line">
+                      <span class="wx-step-pill is-hit">第 2 次打（更省键直接出）</span>
+                      <code class="mono wx-keys">qian'd'l'k'q'c</code>
+                    </div>
+                    <div class="wx-bar">
+                      <span class="wx-cand is-top1">1 签到了快起床</span>
+                      <span class="wx-cand">2 签订了看清楚</span>
+                      <span class="wx-cand">3 签到了</span>
+                      <span class="wx-cand">4 前端</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </article>
 
-            <!-- 右卡片：三大核心痛点 + 微信输入法逻辑占位图 2 -->
+            <!-- 右侧：三大核心痛点 -->
             <article class="panel-box">
               <div class="panel-title-row">
-                <h3>但是：为什么它不是终极答案？</h3>
-                <span class="mini-badge is-danger">三大核心痛点</span>
+                <h3>但是：为什么商业输入法不是终极答案？</h3>
+                <span class="mini-badge is-danger">三大核心局限</span>
               </div>
 
-              <div class="pain-points-compact">
+              <div class="pain-points-list">
                 <div class="pain-row">
                   <span class="pain-idx">01</span>
                   <div>
                     <strong>输入法极度隐私敏感</strong>
-                    <p>聊天记录、账号密码、个人想法全经过输入法；闭源软件 + 云端联想让人难以彻底放心。</p>
+                    <p>聊天记录、账号密码、个人想法全经过输入法；闭源软件的云端联想与遥测机制让人难以彻底放心数据边界。</p>
                   </div>
                 </div>
                 <div class="pain-row">
                   <span class="pain-idx">02</span>
                   <div>
-                    <strong>呆板的“时间换空间”</strong>
-                    <p>依赖通用重型词库与固定云端/本地大模型算力堆叠，策略僵硬、内存和响应开销大。</p>
+                    <strong>呆板的通用“空间换时间”</strong>
+                    <p>面向大众平均习惯构建庞大静态通用词库 + 重型本地模型，靠堆内存和算力覆盖平均人，策略固化且资源开销大。</p>
                   </div>
                 </div>
                 <div class="pain-row">
                   <span class="pain-idx">03</span>
                   <div>
-                    <strong>定制化程度低</strong>
-                    <p>只能全局开几个粗糙模糊音，无法针对你独有的省键节奏、错键分布和常聊语境持续演化。</p>
+                    <strong>深度定制化程度低</strong>
+                    <p>只能粗粒度勾选几个固定模糊音，既看不到自己真实的声韵母偏差统计，也无法用个人专属语料在本地持续训练模型。</p>
                   </div>
                 </div>
               </div>
 
-              <label class="img-slot is-compact" title="点击可临时选择本地图片预览">
-                <img id="img-wechat-logic" class="slot-img" hidden alt="微信输入法运行逻辑图">
-                <div id="placeholder-wechat-logic" class="slot-placeholder">
-                  <span class="slot-badge mono">IMAGE SLOT 02 // 待插入图片</span>
-                  <strong>微信输入法实现逻辑（呆板的时间换空间）</strong>
-                  <p>展示传统大厂输入法的通用词库/大模型推理开销链路（提供图片后替换）</p>
-                </div>
-                <input class="slot-file-input" data-target="wechat-logic" type="file" accept="image/*" hidden>
-              </label>
+              <div class="next-cue">
+                <span>核心思考</span>
+                <p>我们先拆清微信输入法背后的“噪声信道与多级重排”原理，再看如何用开源 Rime 做到<strong>又聪明、又轻量、完全属于你</strong>。</p>
+              </div>
             </article>
           </div>
         </section>
 
-        <!-- 02. 破局方案：基于 Rime 的 Personal-IME 与四大亮点 -->
+        <!-- 02. 竞品原理拆解：现代商业智能输入法（如微信输入法）吞键容错与预测原理 -->
         <section id="slide-2" class="slide-card" data-index="1" hidden aria-labelledby="slide-2-title">
+          <div class="slide-head slide-head-inline">
+            <div>
+              <span class="eyebrow">02 // COMMERCIAL IME ARCHITECTURE · 竞品底层原理解剖</span>
+              <h2 id="slide-2-title" class="slide-title">现代智能输入法（如微信输入法）的吞键容错与预测原理</h2>
+              <p class="slide-lead">
+                本质是一个<strong>噪声信道模型（Noisy Channel Model）</strong>：在敲击序列 <code class="mono">K</code> 残缺或误触时，联合搜索“最像你说的话”与“最可能这样敲错”的词句。
+              </p>
+            </div>
+            <div class="noisy-formula mono">
+              W* = argmax P(W | Context) × P(K | W)
+            </div>
+          </div>
+
+          <div class="wetype-pipeline">
+            <article class="wt-col">
+              <div class="wt-step">STEP 01 // INPUT</div>
+              <h3>残缺 / 吞键按键流</h3>
+              <div class="wt-items">
+                <div class="wt-box">
+                  <code class="mono">xiag</code>
+                  <span>吞键漏打：漏掉后鼻音 n</span>
+                </div>
+                <div class="wt-box">
+                  <code class="mono">senm / qian'd'l'k'q'c</code>
+                  <span>平翘舌混淆 / 尾音截断与简拼</span>
+                </div>
+                <div class="wt-box">
+                  <code class="mono">niaho</code>
+                  <span>高速连打：左右手相邻换序</span>
+                </div>
+              </div>
+              <p class="wt-foot">同步采集 2D QWERTY 键位落点与击键间隔，输入错误模型 <code class="mono">P(K|W)</code>。</p>
+            </article>
+
+            <article class="wt-col is-accent">
+              <div class="wt-step">STEP 02 // FUZZY LATTICE</div>
+              <h3>模糊拼音格 &amp; 容错搜索</h3>
+              <div class="wt-items">
+                <div class="wt-box is-good">
+                  <strong>路径 A：xiag -&gt; xiang</strong>
+                  <span>补 n · 对应 想/项/像（上下文强匹配）</span>
+                </div>
+                <div class="wt-box is-bad">
+                  <strong>路径 B：xiag -&gt; xia + g</strong>
+                  <span>强行割裂：下个/夏哥（被 Beam 剪枝）</span>
+                </div>
+                <div class="wt-box">
+                  <strong>路径 C：邻键 g -&gt; f / h</strong>
+                  <span>2D 键距加权，构建 WFST / 容错 Trie 保留 Top-K</span>
+                </div>
+              </div>
+              <p class="wt-foot">不做死板音节切分，边扫按键边联合搜索“拼写容错 + 词句概率”。</p>
+            </article>
+
+            <article class="wt-col is-warn">
+              <div class="wt-step">STEP 03 // MULTI-TIER LM</div>
+              <h3>多级语言模型打分与重排</h3>
+              <div class="wt-items">
+                <div class="wt-box">
+                  <div class="wt-row-head"><strong>L1 本地极速词典 / N-gram</strong><span class="mono wt-ms">&lt; 5 ms</span></div>
+                  <span>庞大静态通用词库 + 热词缓存，靠<strong>“空间换时间”</strong>直接命中约 80% 常规高频输入。</span>
+                </div>
+                <div class="wt-box">
+                  <div class="wt-row-head"><strong>L2 端侧轻量神经模型</strong><span class="mono wt-ms">10~30 ms</span></div>
+                  <span>几十 MB 量化 RNN / Transformer，结合上下文对 Top-K 候选重排与下一词预测。</span>
+                </div>
+                <div class="wt-box is-cloud">
+                  <div class="wt-row-head"><strong>L3 云端大模型 / 热词补强</strong><span class="mono wt-ms">异步联网</span></div>
+                  <span>重度错拼或长句简拼时，异步上传上下文至云端拉取联想候选插入前排。</span>
+                </div>
+              </div>
+              <p class="wt-foot">层层加码的通用大底座：省了训练，却把空间和隐私成本转嫁给用户。</p>
+            </article>
+
+            <article class="wt-col">
+              <div class="wt-step">STEP 04 // OUTPUT</div>
+              <h3>智能纠错候选输出</h3>
+              <div class="wt-items">
+                <div class="wt-cand is-top1"><span>1. 想吃什么</span><small>上下文重排 Top-1</small></div>
+                <div class="wt-cand"><span>2. 你好呀</span><small>换序纠错</small></div>
+                <div class="wt-cand"><span>3. 晚上一起</span><small>下一词预测</small></div>
+              </div>
+              <p class="wt-foot">只要语言模型得分足以抵消拼写惩罚，即使敲错或吞键也能精准输出。</p>
+            </article>
+          </div>
+
+          <div class="wt-limitation-bar">
+            <span class="wt-lim-title">商业方案局限</span>
+            <span><strong>1. 隐私敏感</strong>（L3 云端上下文出境顾虑）</span>
+            <span><strong>2. 呆板空间换时间</strong>（L1 通用大词库无法按个人手癖裁剪）</span>
+            <span><strong>3. 定制化低</strong>（不能微调个人声韵母习惯与本地专属语料）</span>
+          </div>
+        </section>
+
+        <!-- 03. 破局方案：基于 Rime 的 Personal-IME 与四大亮点 -->
+        <section id="slide-3" class="slide-card" data-index="2" hidden aria-labelledby="slide-3-title">
           <div class="slide-head">
-            <span class="eyebrow">02 // SOLUTION &amp; HIGHLIGHTS · 基于 RIME 的个性化输入法</span>
-            <h2 id="slide-2-title" class="slide-title">于是我们基于 Rime，打造真正懂你的 Personal-IME</h2>
+            <span class="eyebrow">03 // OUR SOLUTION · 基于 RIME 的 PERSONAL-IME</span>
+            <h2 id="slide-3-title" class="slide-title">基于 Rime 的个性化输入法：轻巧、开源、且真正懂你</h2>
             <p class="slide-lead">
-              不从零重写输入法框架，而是以开源 <strong>Rime（小狼毫 + 雾凇拼音）</strong> 为底座，把“开局冷启动定制 + 日常智能切换 + 长期小模型演化”全部留在本地。
+              我们不重复造词库轮子，也不靠百兆通用大模型硬扛；而是把开源 <strong>Rime（小狼毫 + 雾凇拼音）</strong> 与<strong>个人习惯驱动</strong>结合起来，沉淀出四大核心亮点：
             </p>
           </div>
 
@@ -150,7 +283,7 @@
               <div class="hl-num mono">01</div>
               <div class="hl-tag">开源底座 · 数据自主</div>
               <h3>基于开源库，零黑盒全本地</h3>
-              <p>立足 <strong>Rime 引擎 + 雾凇拼音 + 8105 通用字表 + Qwen3 开源生态</strong>，只用 Lua 插件与轻量本地服务增强，敏感内容（数字/邮箱/密钥）写入前直接拦截。</p>
+              <p>立足 <strong>Rime 引擎 + 雾凇拼音 + 8105 通用字表 + Qwen3 开源生态</strong>，只用 Lua 插件与轻量本地服务增强。所有日志写入前硬拦截敏感数字/邮箱/密钥，数据与模型权重 100% 留在本地。</p>
               <div class="hl-foot mono">rime/ · 8105.dict.yaml · Qwen3-0.6B</div>
             </article>
 
@@ -158,60 +291,60 @@
               <div class="hl-num mono">02</div>
               <div class="hl-tag">开局冷启动 · 告别盲猜</div>
               <h3>开局个性化定制规则，不用自己猜习惯</h3>
-              <p>大多数人其实说不清自己是 <code class="mono">l=n</code> 还是 <code class="mono">ong=on</code>。只需敲 3 句测速文本，系统自动对比参考拼音与原始击键，量化生成 Rime 补丁。</p>
-              <div class="hl-foot mono">/play 诊断 -> 24 条标准规则 -> algebra 补丁</div>
+              <p>多数人根本不知道自己平时爱把 <code class="mono">ong</code> 打成 <code class="mono">on</code> 还是混淆 <code class="mono">l/r</code>。开局只需敲 3 句测速文本，系统自动与标准拼音对齐并量化成专属 Rime 模糊音补丁。</p>
+              <div class="hl-foot mono">/play 诊断 -&gt; 24 条标准规则 -&gt; algebra 补丁</div>
             </article>
 
             <article class="highlight-card">
               <div class="hl-num mono">03</div>
               <div class="hl-tag">日常演化 · 越用越准</div>
-              <h3>使用中智能切换，拒绝词库越用越脏</h3>
-              <p>日常敲击通过滑动窗口统计每条规则的真实收益（<code class="mono">15%</code> 开启 / <code class="mono">&lt;5%</code> 自动关闭），换键盘或习惯变了也能无感切换并轻提示。</p>
+              <h3>使用中智能切换，拒绝候选栏变脏</h3>
+              <p>模糊音开多了会出大量重码。日常使用通过 500 条滑动窗口核算每条规则的真实收益（<code class="mono">&gt;=15%</code> 开启 / <code class="mono">&lt;5%</code> 关闭），习惯一变自动热切换并轻提醒。</p>
               <div class="hl-foot mono">rule_updater.py · rule_notify.lua</div>
             </article>
 
             <article class="highlight-card is-green">
               <div class="hl-num mono">04</div>
-              <div class="hl-tag">长期沉淀 · 端侧智能</div>
-              <h3>长期使用自动训练个人小模型</h3>
-              <p>随个人日志积累，周末空闲本地微调轻量模型（LoRA / 29M），配合<strong>拼音 Trie 容错约束</strong>与亚毫秒 C 桥接，既懂你的错键习惯又不会乱造字。</p>
+              <div class="hl-tag">长期沉淀 · 个性化小模型</div>
+              <h3>长期使用自动训练小模型，取代呆板大词库</h3>
+              <p>长期日志积攒了你的真实错键分布与常用语境后，周末空闲本地微调专属小模型（LoRA / 29M），并用<strong>拼音 Trie 约束 + 亚毫秒 C 桥接</strong>按需接管长简拼纠错。</p>
               <div class="hl-foot mono">noise_simulator · LoRA · Trie Beam Search</div>
             </article>
           </div>
         </section>
 
-        <!-- 03. 亮点 1 & 2 展开：开局个性化定制规则，不用自己猜自己的习惯 -->
-        <section id="slide-3" class="slide-card" data-index="2" hidden aria-labelledby="slide-3-title">
+        <!-- 04. 亮点 1 & 2 展开：开局个性化规则定制 -->
+        <section id="slide-4" class="slide-card" data-index="3" hidden aria-labelledby="slide-4-title">
           <div class="slide-head">
-            <span class="eyebrow">03 // HIGHLIGHT 1 &amp; 2 · 开局个性化规则定制</span>
-            <h2 id="slide-3-title" class="slide-title">不用自己猜习惯：3 句竞速自动诊断 + 24 条 Rime 规则编译</h2>
+            <span class="eyebrow">04 // HIGHLIGHT 1 &amp; 2 · 开局个性化规则定制</span>
+            <h2 id="slide-4-title" class="slide-title">不用自己猜习惯：3 句竞速对齐 + 24 条标准 Rime 规则编译</h2>
             <p class="slide-lead">
-              传统输入法让你对着几十个模糊音开关发呆“我到底要不要开？”——我们直接把你在真实敲击中暴露的细微习惯，确定性地编译成可开关的 Rime 配置。
+              传统输入法只给一堆开关让你自己猜；我们直接采集原始敲击流，经动态规划音节对齐与白名单防幻觉校验，确定性编译为雾凇拼音补丁。
             </p>
           </div>
 
           <div class="goal1-grid">
             <div class="panel-box">
-              <h3>自动诊断流水线（为什么不用手猜、也不会有幻觉？）</h3>
+              <h3>冷启动自动诊断流水线</h3>
               <div class="flow-steps-vertical">
                 <div class="v-step">
                   <span class="v-num">A</span>
                   <div>
                     <strong>无空格连打 DP 音节对齐（<code class="mono">play.js</code>）</strong>
-                    <p>允许按平时习惯不敲空格直接连打，用动态规划（1~7 字符窗口 + 编辑距离）把按键串对齐到每个汉字的标准拼音，精准捕捉 <code class="mono">zhon-&gt;zhong</code>、<code class="mono">len-&gt;ren</code>。</p>
+                    <p>允许按平时习惯不按空格直接连敲整句，通过 1~7 字符窗口 + 编辑距离动态规划对齐到参考音节，准确抽取 <code class="mono">zhon-&gt;zhong</code>、<code class="mono">len-&gt;ren</code>。</p>
                   </div>
                 </div>
                 <div class="v-step">
                   <span class="v-num">B</span>
                   <div>
-                    <strong>DeepSeek 点评 + 白名单防幻觉归一化</strong>
-                    <p>DeepSeek 生成趣味点评并推荐规则 ID；后端经 <code class="mono">normalize_rule_id</code> 将别名归一化，严禁大模型自造语法；无 Key 或超时 &gt;6s 自动切换本地启发式兜底。</p>
+                    <strong>DeepSeek 趣味点评 + 白名单防幻觉归一化</strong>
+                    <p>DeepSeek 在 24 条标准词表内挑选规则并生成点评；后端 <code class="mono">normalize_rule_id</code> 归一化别名并拦截自造规则，无 Key 或超时 &gt;6s 自动切换本地启发式。</p>
                   </div>
                 </div>
                 <div class="v-step">
                   <span class="v-num">C</span>
                   <div>
-                    <strong>24 条标准离散规则（<code class="mono">rules_schema.py</code>）</strong>
+                    <strong>24 条标准可量化规则（<code class="mono">rules_schema.py</code>）</strong>
                     <p>覆盖 <strong>7 声母</strong>（平翘舌、<code class="mono">l=n</code>、<code class="mono">l=r</code>、<code class="mono">f=h</code>、<code class="mono">g=k</code>）、<strong>8 韵母</strong>（<code class="mono">ong=on</code>、前后鼻音）、<strong>9 容错</strong>（<code class="mono">ju=jv</code>、换序 <code class="mono">an=na</code>、<code class="mono">zh=hz</code>）。</p>
                   </div>
                 </div>
@@ -220,7 +353,7 @@
 
             <div class="panel-box is-soft">
               <div class="panel-title-row">
-                <h3>交互式预览：诊断结果如何变成 Rime 配置</h3>
+                <h3>交互式预览：规则 ID 如何编译为 Rime Algebra</h3>
                 <span class="mini-badge">点击规则切换</span>
               </div>
               <div id="rule-demo-tabs" class="rule-demo-tabs"></div>
@@ -246,14 +379,14 @@
           </div>
         </section>
 
-        <!-- 04. 现场扫码互动：此时右侧二维码 + 实时榜自动展开 -->
-        <section id="slide-4" class="slide-card" data-index="3" hidden aria-labelledby="slide-4-title">
+        <!-- 05. 现场扫码互动：此时右侧二维码 + 实时榜自动展开 -->
+        <section id="slide-5" class="slide-card" data-index="4" hidden aria-labelledby="slide-5-title">
           <div class="slide-head slide-head-inline">
             <div>
-              <span class="eyebrow">04 // LIVE COLD-START DEMO · 现场扫码测手癖</span>
-              <h2 id="slide-4-title" class="slide-title">现在轮到大家体验：扫码 30 秒，测出你的隐形手癖</h2>
+              <span class="eyebrow">05 // LIVE COLD-START DEMO · 现场扫码测手癖</span>
+              <h2 id="slide-5-title" class="slide-title">现场实操：扫码敲 3 句，看看系统给你开出什么 Rime 规则</h2>
               <p class="slide-lead">
-                扫描右侧二维码进入 <code class="mono">/play</code>（英文 26 键直打 3 句），大屏实时上墙 DeepSeek 趣味点评、检测出的规则标签与竞速排名。
+                扫描右侧二维码进入 <code class="mono">/play</code>（英文 26 键直打 3 句拼音，不用选字），大屏实时上墙 DeepSeek 趣味点评、检测出的规则标签与竞速排行。
               </p>
             </div>
             <div class="live-wall-controls">
@@ -278,20 +411,20 @@
           </div>
         </section>
 
-        <!-- 05. 亮点 3 展开：使用中智能切换（滑动窗口 + 迟滞阈值 + 无感提醒） -->
-        <section id="slide-5" class="slide-card" data-index="4" hidden aria-labelledby="slide-5-title">
+        <!-- 06. 亮点 3 展开：使用中智能切换 -->
+        <section id="slide-6" class="slide-card" data-index="5" hidden aria-labelledby="slide-6-title">
           <div class="slide-head">
-            <span class="eyebrow">05 // HIGHLIGHT 3 · 使用中智能切换与防抖校准</span>
-            <h2 id="slide-5-title" class="slide-title">使用中智能切换：滑动窗口自校准 + 迟滞防抖 + 3 次轻提醒</h2>
+            <span class="eyebrow">06 // HIGHLIGHT 3 · 使用中智能切换与防抖校准</span>
+            <h2 id="slide-6-title" class="slide-title">使用中智能切换：滑动窗口自校准 + 迟滞防抖 + 3 次轻提醒</h2>
             <p class="slide-lead">
-              开局诊断只是起点。换新键盘或手癖改善后，死开模糊音会污染候选栏。<code class="mono">ime_logger.lua</code> 脱敏记录真实回改，由 <code class="mono">rule_updater.py</code> 在日常中动态开关规则。
+              开局诊断只是冷启动。日常换了键盘或习惯迁移后，<code class="mono">ime_logger.lua</code> 脱敏捕捉初犯与退格，<code class="mono">rule_updater.py</code> 动态启停规则避免词库污染。
             </p>
           </div>
 
           <div class="two-col-grid">
             <div class="panel-box">
               <h3>1. 机会样本统计与迟滞双阈值状态机</h3>
-              <p class="small-note">只在目标拼音确实出现该音素时计入机会样本（<code class="mono">samples &gt;= 20</code>），再用真实触发率 <code class="mono">rate = hits / samples</code> 驱动状态切换。</p>
+              <p class="small-note">只在目标拼音确实出现对应音素时计入机会样本（<code class="mono">samples &gt;= 20</code>），再用真实触发率 <code class="mono">rate = hits / samples</code> 驱动切换。</p>
 
               <svg class="diagram-svg" viewBox="0 0 540 176" role="img" aria-label="迟滞双阈值状态机">
                 <defs>
@@ -336,13 +469,13 @@
                   <span class="v-num">1</span>
                   <div>
                     <strong>隐私硬过滤 + 初犯快照（<code class="mono">ime_logger.lua</code>）</strong>
-                    <p>写入前直接拦截 4 位以上数字、<code class="mono">@</code>、<code class="mono">://</code>、<code class="mono">sk-</code>/<code class="mono">ghp_</code>；首次退格记录 <code class="mono">first_attempt</code>，80ms 内连击记入 <code class="mono">chatter</code>。</p>
+                    <p>写入前硬拦截 4 位及以上数字、<code class="mono">@</code>、<code class="mono">://</code>、<code class="mono">sk-</code>/<code class="mono">ghp_</code>；首次退格锁定 <code class="mono">first_attempt</code>，80ms 内连击标记硬件抖动。</p>
                   </div>
                 </div>
                 <div class="v-step">
                   <span class="v-num">2</span>
                   <div>
-                    <strong>受控区热更新，不碰手写配置</strong>
+                    <strong>受控区块热更新，不碰手写配置</strong>
                     <p>仅重写 <code class="mono">rime_ice.custom.yaml</code> 的 <code class="mono"># BEGIN/END PERSONAL-IME AUTO RULES</code> 标记区块，保留其余自定义方案。</p>
                   </div>
                 </div>
@@ -350,7 +483,7 @@
                   <span class="v-num">3</span>
                   <div>
                     <strong>首候选轻提示 3 次即静默（<code class="mono">rule_notify.lua</code>）</strong>
-                    <p>仅在规则变更后的前 3 次上屏于首候选注释轻提示（如 <code class="mono">[已开启 ong=on]</code>），计数归零自动隐身，无弹窗打扰。</p>
+                    <p>规则变更后仅在接下来 3 次上屏的首候选注释栏轻提示（如 <code class="mono">[已开启 ong=on]</code>），计数归零自动隐身，绝不弹窗打扰。</p>
                   </div>
                 </div>
               </div>
@@ -358,13 +491,13 @@
           </div>
         </section>
 
-        <!-- 06. 亮点 4 展开（上）：长期使用自动训练小模型（噪声合成 + 单字母分词） -->
-        <section id="slide-6" class="slide-card" data-index="5" hidden aria-labelledby="slide-6-title">
+        <!-- 07. 亮点 4 展开（上）：长期使用自动训练小模型（噪声拟合 + 单字母分词） -->
+        <section id="slide-7" class="slide-card" data-index="6" hidden aria-labelledby="slide-7-title">
           <div class="slide-head">
-            <span class="eyebrow">06 // HIGHLIGHT 4 (PART A) · 长期演化：个性化小模型后训练</span>
-            <h2 id="slide-6-title" class="slide-title">长期自动训练小模型：真实物理噪声拟合 + 单字母分词破壁</h2>
+            <span class="eyebrow">07 // HIGHLIGHT 4 (PART A) · 长期演化：个性化小模型后训练</span>
+            <h2 id="slide-7-title" class="slide-title">长期自动训练小模型：个人物理噪声拟合 + 单字母分词破壁</h2>
             <p class="slide-lead">
-              规则解决固定手癖，但遇到“既简拼又误触”且依赖上下文的情况（如 <code class="mono">wishi -&gt; 我是</code>、<code class="mono">paoshibnie -&gt; 跑识别</code>），需要利用个人日志参数化合成语料并周末本地微调轻量模型。
+              规则管固定音变，遇到重度简拼与跨键误触（类似前面微信输入法 <code class="mono">qian'd'l'k'q'c</code> 或真实日志 <code class="mono">paoshibnie</code>），靠个人噪声参数化合成语料 + 周末本地微调解决。
             </p>
           </div>
 
@@ -374,7 +507,7 @@
               <div class="noise-layers">
                 <div class="noise-layer">
                   <span class="layer-badge">层 1 · jieba 词级节奏</span>
-                  <p>按词决定全拼(35%) / 纯首字母(28%) / 前重后轻半截(25%) / 混打(12%)，而非逐字随机。</p>
+                  <p>按词决定全拼(35%) / 纯首字母(28%) / 前重后轻半截(25%) / 混打(12%)，避免逐字随机的机械感。</p>
                 </div>
                 <div class="noise-layer">
                   <span class="layer-badge">层 2 · 21 种发音省力截断</span>
@@ -416,7 +549,7 @@
                     <strong>PC 端周末微调：Qwen3-0.6B LoRA</strong>
                     <span class="mini-badge">r=16, alpha=32</span>
                   </div>
-                  <p>仅对 <code class="mono">&lt;tgt&gt;</code> 后目标汉字算损失，bf16 + 梯度检查点，个人 PC 周末空闲即可本地后训练更新。</p>
+                  <p>仅对 <code class="mono">&lt;tgt&gt;</code> 后目标汉字算交叉熵损失，bf16 + 梯度检查点，个人 PC 周末空闲自动增量微调。</p>
                 </div>
                 <div class="route-card">
                   <div class="route-head">
@@ -430,13 +563,13 @@
           </div>
         </section>
 
-        <!-- 07. 亮点 4 展开（下）：拼音 Trie 容错约束与 Rime C 桥接 -->
-        <section id="slide-7" class="slide-card" data-index="6" hidden aria-labelledby="slide-7-title">
+        <!-- 08. 亮点 4 展开（下）：拼音 Trie 容错约束与 Rime C 桥接 -->
+        <section id="slide-8" class="slide-card" data-index="7" hidden aria-labelledby="slide-8-title">
           <div class="slide-head">
-            <span class="eyebrow">07 // HIGHLIGHT 4 (PART B) · 拼音 TRIE 约束与亚毫秒 RIME 桥接</span>
-            <h2 id="slide-7-title" class="slide-title">不放纵小模型乱造字：拼音 Trie 容错约束 + 零黑框接入小狼毫</h2>
+            <span class="eyebrow">08 // HIGHLIGHT 4 (PART B) · 拼音 TRIE 约束与亚毫秒 RIME 桥接</span>
+            <h2 id="slide-8-title" class="slide-title">不取代雾凇、不乱造字：拼音 Trie 容错约束 + 零黑框接入小狼毫</h2>
             <p class="slide-lead">
-              不是用“时间换空间”硬跑全词表，而是按需触发 + <strong>8105 汉字读音 Trie</strong> 剪枝 + <strong>Winsock2 亚毫秒 C 桥接</strong>，既能容忍误触又守住读音底线。
+              告别微信输入法重型“空间换时间”：平时打字 0ms 走雾凇原生，末尾敲 <code class="mono">'</code> 按需触发本地 GPU 推理，用 <strong>8105 汉字读音 Trie</strong> 锁死读音边界。
             </p>
           </div>
 
@@ -505,14 +638,14 @@
           </div>
         </section>
 
-        <!-- 08. 寝室实证对比卡片 -->
-        <section id="slide-8" class="slide-card" data-index="7" hidden aria-labelledby="slide-8-title">
+        <!-- 09. 寝室实证对比卡片 -->
+        <section id="slide-9" class="slide-card" data-index="8" hidden aria-labelledby="slide-9-title">
           <div class="slide-head slide-head-inline">
             <div>
-              <span class="eyebrow">08 // DORM A/B EMPIRICAL COMPARISON · 寝室小范围实证</span>
-              <h2 id="slide-8-title" class="slide-title">同一串错拼输入，在三套模型上的真实差异输出</h2>
+              <span class="eyebrow">09 // DORM A/B EMPIRICAL COMPARISON · 寝室小范围实证</span>
+              <h2 id="slide-9-title" class="slide-title">同一串错拼输入，在三套模型上的真实差异输出</h2>
               <p class="slide-lead">
-                用本人与室友两份差异明显的敲击/用词习惯分别后训练 LoRA：当通用底座还在“猜平均人”时，个人小模型已经直奔你的习惯词去。
+                用本人与室友两份差异明显的敲击/用词习惯分别后训练 LoRA：通用底座在“猜平均人”，而各自的专属小模型直奔主人常用词去。
               </p>
             </div>
             <div class="case-toolbar">
@@ -579,7 +712,7 @@
       <footer class="stage-footer">
         <div class="footer-hints">
           <span class="kbd-hint"><kbd>←</kbd> <kbd>→</kbd> 翻页</span>
-          <span class="kbd-hint"><kbd>1</kbd>-<kbd>8</kbd> 直达</span>
+          <span class="kbd-hint"><kbd>1</kbd>-<kbd>9</kbd> 直达</span>
           <span class="kbd-hint"><kbd>B</kbd> 榜单</span>
           <span class="kbd-hint"><kbd>F</kbd> 全屏</span>
         </div>
@@ -593,7 +726,7 @@
       </footer>
     </main>
 
-    <!-- 右侧 ~35%：初始隐藏，进入互动环节或点击「显示榜单」后平滑展开 -->
+    <!-- 右侧 ~35%：初始隐藏，进入第 5 页互动或点击「显示榜单」后平滑展开 -->
     <aside id="stage-right" class="stage-right" hidden aria-label="扫码参赛与实时排行榜">
       <section class="qr-card">
         <div class="qr-box" id="qr-canvas-wrap" aria-label="扫码进入 /play 二维码"></div>

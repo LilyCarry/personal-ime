@@ -501,8 +501,8 @@
     },
   ];
 
-  const TOTAL_SLIDES = 8;
-  const INTERACTIVE_SLIDE_INDEX = 3; // 第 4 页「现场互动」默认自动展开右侧榜单
+  const TOTAL_SLIDES = 9;
+  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页「现场互动」默认自动展开右侧榜单
   const POLL_INTERVAL_MS = 2000;
   const WALL_ROTATE_MS = 4500;
 
@@ -534,10 +534,7 @@
     nextSlideBtn: document.getElementById("next-slide-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
 
-    // Slide 1 image slots
-    slotInputs: Array.from(document.querySelectorAll(".slot-file-input")),
-
-    // Slide 4 (live interaction wall)
+    // Slide 5 (live interaction wall)
     wallTotalCount: document.getElementById("wall-total-count"),
     wallToggleBtn: document.getElementById("wall-toggle-btn"),
     wallNextBtn: document.getElementById("wall-next-btn"),
@@ -545,7 +542,7 @@
     spotlightBox: document.getElementById("spotlight-box"),
     recentFeedList: document.getElementById("recent-feed-list"),
 
-    // Slide 3 interactive compiler
+    // Slide 4 interactive compiler
     ruleDemoTabs: document.getElementById("rule-demo-tabs"),
     compilerRuleId: document.getElementById("compiler-rule-id"),
     compilerAlias: document.getElementById("compiler-alias"),
@@ -553,11 +550,11 @@
     compilerDesc: document.getElementById("compiler-desc"),
     compilerYaml: document.getElementById("compiler-yaml"),
 
-    // Slide 6 interactive noise simulator
+    // Slide 7 interactive noise simulator
     simTabs: document.getElementById("sim-tabs"),
     simPipelineView: document.getElementById("sim-pipeline-view"),
 
-    // Slide 8 compare cases
+    // Slide 9 compare cases
     casesSourceBadge: document.getElementById("cases-source-badge"),
     casesFileInput: document.getElementById("cases-file-input"),
     caseSelector: document.getElementById("case-selector"),
@@ -661,13 +658,12 @@
     el.nextSlideBtn.disabled = target === TOTAL_SLIDES - 1;
     renderSlideDots();
 
-    // 当首次切入「现场互动」页时自动呼出右侧二维码与排行榜（若用户未手动关闭过）
     if (!state.sidebarManualOverride && target === INTERACTIVE_SLIDE_INDEX && !state.sidebarVisible) {
       setSidebarVisible(true);
     }
   }
 
-  // ---- Slide 4: Interaction Wall ----
+  // ---- Slide 5: Interaction Wall ----
   function renderInteractionWall() {
     const items = state.recentComments;
     el.wallTotalCount.textContent = String(state.totalCount);
@@ -773,7 +769,7 @@
     });
   }
 
-  // ---- Slide 3: Interactive Rule Compiler ----
+  // ---- Slide 4: Interactive Rule Compiler ----
   function renderRuleCompilerDemo() {
     el.ruleDemoTabs.innerHTML = "";
     RULE_COMPILER_DEMOS.forEach((item, idx) => {
@@ -802,7 +798,7 @@
     el.compilerYaml.textContent = yamlLines.join("\n");
   }
 
-  // ---- Slide 6: Interactive Noise Simulator ----
+  // ---- Slide 7: Interactive Noise Simulator ----
   function renderNoiseSimDemo() {
     el.simTabs.innerHTML = "";
     NOISE_SIM_DEMOS.forEach((item, idx) => {
@@ -826,7 +822,7 @@
     });
   }
 
-  // ---- Slide 8: Dorm Compare Cases ----
+  // ---- Slide 9: Dorm Compare Cases ----
   function normalizePredList(pred) {
     if (Array.isArray(pred)) {
       return pred.slice(0, 3).map((item) => {
@@ -1122,22 +1118,6 @@
     el.toggleSidebarBtn.addEventListener("click", () => {
       state.sidebarManualOverride = true;
       setSidebarVisible(!state.sidebarVisible);
-    });
-
-    // Slide 1 placeholder local image preview
-    el.slotInputs.forEach((input) => {
-      input.addEventListener("change", (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const target = input.dataset.target;
-        const imgEl = document.getElementById(`img-${target}`);
-        const placeholderEl = document.getElementById(`placeholder-${target}`);
-        if (imgEl && placeholderEl) {
-          imgEl.src = URL.createObjectURL(file);
-          imgEl.hidden = false;
-          placeholderEl.hidden = true;
-        }
-      });
     });
 
     window.addEventListener("keydown", (e) => {

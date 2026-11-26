@@ -740,38 +740,99 @@
     });
 
     const ROWS = [
-      ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-      ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-      ["z", "x", "c", "v", "b", "n", "m"],
+      { keys: "qwertyuiop", offset: 0.0 },
+      { keys: "asdfghjkl", offset: 0.35 },
+      { keys: "zxcvbnm", offset: 0.85 },
     ];
-    const NEIGHBORS = {
-      g: { f: "0.82", h: "0.82", t: "0.54", b: "0.49", v: "0.49" },
-      n: { b: "0.82", m: "0.82", h: "0.54", j: "0.54" },
-      w: { q: "0.82", e: "0.82", s: "0.54", a: "0.49" },
-      q: { w: "0.82", a: "0.54" },
-    };
+    // Compute exact normalized 1/dist^2 weights for ALL 26 keys (matching profiler/noise_simulator.py)
+    const QWERTY_POS = {};
+    ROWS.forEach((r, rIdx) => {
+      for (let c = 0; c < r.keys.length; c += 1) {
+        QWERTY_POS[r.keys[c]] = [c + r.offset, rIdx];
+      }
+    });
+    const QWERTY_NEIGHBORS = {};
+    Object.keys(QWERTY_POS).forEach((ch) => {
+      const [x1, y1] = QWERTY_POS[ch];
+      const raw = [];
+      Object.keys(QWERTY_POS).forEach((other) => {
+        if (other === ch) return;
+        const [x2, y2] = QWERTY_POS[other];
+        const dist = Math.hypot(x1 - x2, y1 - y2);
+        if (dist <= 1.55) raw.push([other, 1.0 / (dist * dist)]);
+      });
+      const total = raw.reduce((acc, item) => acc + item[1], 0) || 1;
+      const map = {};
+      raw
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([other, w]) => {
+          map[other] = w / total;
+        });
+      QWERTY_NEIGHBORS[ch] = map;
+    });
+
     const ABBR = new Set(["w", "m", "x", "q", "c", "f"]);
     const kbWrap = document.getElementById("qwerty-heatmap");
     const cap = document.getElementById("kb-sim-caption");
     const note = document.getElementById("kb-formula-note");
     const kbBtns = document.querySelectorAll(".kb-mode-btn");
+    const sandboxInput = document.getElementById("kb-sandbox-input");
+    const sampleBtn = document.getElementById("kb-sample-btn");
+    const clearBtn = document.getElementById("kb-clear-btn");
+    let lockedTarget = "g";
+    let hoverTarget = null;
+    let lastTypoTrace = "";
 
-    function renderKb() {
-      const target = state.kbTarget;
-      const near = NEIGHBORS[target] || NEIGHBORS.g;
+    function sampleNeighborChar(ch) {
+      const map = QWERTY_NEIGHBORS[ch];
+      if (!map) return ch;
+      const entries = Object.entries(map);
+      if (entries.length === 0) return ch;
+      let r = Math.random();
+      for (let i = 0; i < entries.length; i += 1) {
+        r -= entries[i][1];
+        if (r <= 0) return entries[i][0];
+      }
+      return entries[0][0];
+    }
+
+    function perturbText(text) {
+      if (!text) return "";
+      const chars = text.toLowerCase().split("").filter((c) => QWERTY_POS[c]);
+      if (chars.length === 0) return text;
+      const idx = Math.floor(Math.random() * chars.length);
+      const orig = chars[idx];
+      const sub = sampleNeighborChar(orig);
+      chars[idx] = sub;
+      const pct = Math.round((QWERTY_NEIGHBORS[orig][sub] || 0) * 100);
+      lastTypoTrace = `${orig.toUpperCase()}→${sub.toUpperCase()} (${pct}%)`;
+      return chars.join("");
+    }
+
+    function renderKb(flashPressKey) {
+      const target = hoverTarget || state.kbTarget || lockedTarget;
+      const near = QWERTY_NEIGHBORS[target] || QWERTY_NEIGHBORS.g;
       kbWrap.innerHTML = ROWS.map(
-        (row, rIdx) =>
-          `<div class="kb-row r-${rIdx + 1}">${row
+        (rObj, rIdx) =>
+          `<div class="kb-row r-${rIdx + 1}">${rObj.keys
+            .split("")
             .map((ch) => {
               let cls = "kb-key";
               let sub = "&nbsp;";
+              let styleAttr = "";
+              let barHtml = "";
+              if (flashPressKey && ch === flashPressKey) cls += " is-phys-press";
               if (state.kbMode === "adjacent") {
                 if (ch === target) {
                   cls += " is-target";
-                  sub = "1.00";
+                  sub = "100%";
                 } else if (near[ch]) {
+                  const pct = Math.round(near[ch] * 100);
+                  const heat = Math.min(1, near[ch] * 3.2).toFixed(2);
                   cls += " is-near";
-                  sub = near[ch];
+                  sub = `${pct}%`;
+                  styleAttr = ` style="--heat:${heat}"`;
+                  barHtml = `<span class="kb-bar" style="transform:scaleX(${Math.min(1, near[ch] * 3).toFixed(2)})"></span>`;
                 }
               } else if (state.kbMode === "abbr" && ABBR.has(ch)) {
                 cls += " is-abbr";
@@ -785,23 +846,45 @@
                   sub = "省略";
                 }
               }
-              return `<button type="button" class="${cls}" data-k="${ch}">${ch.toUpperCase()}<small>${sub}</small></button>`;
+              return `<button type="button" class="${cls}"${styleAttr} data-k="${ch}">${ch.toUpperCase()}<small>${sub}</small>${barHtml}</button>`;
             })
             .join("")}</div>`
       ).join("");
 
-      kbWrap.querySelectorAll(".kb-key").forEach((k) =>
+      kbWrap.querySelectorAll(".kb-key").forEach((k) => {
+        const ch = k.dataset.k;
+        k.addEventListener("pointerenter", () => {
+          if (state.kbMode !== "adjacent") return;
+          hoverTarget = ch;
+          renderKb();
+        });
+        k.addEventListener("pointerleave", () => {
+          if (hoverTarget === ch) {
+            hoverTarget = null;
+            renderKb();
+          }
+        });
         k.addEventListener("click", () => {
           state.kbMode = "adjacent";
-          state.kbTarget = NEIGHBORS[k.dataset.k] ? k.dataset.k : "g";
+          lockedTarget = ch;
+          state.kbTarget = ch;
+          hoverTarget = null;
           kbBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.kb === "adjacent"));
-          renderKb();
-        })
-      );
+          if (sandboxInput) sandboxInput.value = `${sandboxInput.value}${ch}`.slice(-24);
+          renderKb(ch);
+        });
+      });
 
       if (state.kbMode === "adjacent") {
-        cap.textContent = `物理邻键波纹：聚焦键 ${target.toUpperCase()}（1/dist^2 邻键权重）`;
-        note.innerHTML = `<div class="ime-cand is-winner">目标键 ${target} -> 物理旁键距离惩罚（复现 paoshibnie 蹭键）</div>`;
+        const sorted = Object.entries(near).slice(0, 4);
+        const topText = sorted.map(([k2, w2]) => `${k2.toUpperCase()}:${Math.round(w2 * 100)}%`).join(" · ");
+        cap.textContent = `全键盘 1/dist^2 波纹：聚焦 ${target.toUpperCase()}（支持悬停/点击/实机键盘）`;
+        const typed = sandboxInput ? sandboxInput.value.trim() : "";
+        note.innerHTML = typed
+          ? `<div class="ime-cand is-winner">实机输入 ${escapeHtml(typed)} | 邻键权重 ${escapeHtml(topText)}</div>${
+              lastTypoTrace ? `<div class="ime-cand">上次错拼模拟：${escapeHtml(lastTypoTrace)}</div>` : ""
+            }`
+          : `<div class="ime-cand is-winner">${target.toUpperCase()} 的最近邻键概率：${escapeHtml(topText)}</div>`;
       } else if (state.kbMode === "abbr") {
         cap.textContent = "整句首字母简拼采样：wmxqcf -> 我们先去吃饭";
         note.innerHTML = `<div class="ime-cand is-winner">21 种声韵母缩写率由脱敏日志直接估算</div>`;
@@ -810,6 +893,63 @@
         note.innerHTML = `<div class="ime-cand is-winner">以词为单位丢音节，贴合真实连续输入手癖</div>`;
       }
     }
+
+    if (sandboxInput) {
+      sandboxInput.addEventListener("input", () => {
+        const clean = sandboxInput.value.toLowerCase().replace(/[^a-z]/g, "");
+        if (sandboxInput.value !== clean) sandboxInput.value = clean;
+        const lastCh = clean.slice(-1);
+        if (lastCh && QWERTY_POS[lastCh]) {
+          state.kbMode = "adjacent";
+          lockedTarget = lastCh;
+          state.kbTarget = lastCh;
+          hoverTarget = null;
+          kbBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.kb === "adjacent"));
+          renderKb(lastCh);
+        } else {
+          renderKb();
+        }
+      });
+      sandboxInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === "Escape") sandboxInput.blur();
+      });
+    }
+
+    if (sampleBtn) {
+      sampleBtn.addEventListener("click", () => {
+        const baseVal = (sandboxInput && sandboxInput.value.trim()) || "paosh";
+        const noisy = perturbText(baseVal);
+        if (sandboxInput) sandboxInput.value = noisy;
+        const focus = noisy.slice(-1);
+        if (QWERTY_POS[focus]) {
+          lockedTarget = focus;
+          state.kbTarget = focus;
+        }
+        renderKb(focus);
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        if (sandboxInput) sandboxInput.value = "";
+        lastTypoTrace = "";
+        renderKb();
+      });
+    }
+
+    // Expose physical-key handler on Module 07 for global keydown
+    state.triggerMod7Key = (ch) => {
+      const k = ch.toLowerCase();
+      if (!QWERTY_POS[k]) return false;
+      state.kbMode = "adjacent";
+      lockedTarget = k;
+      state.kbTarget = k;
+      hoverTarget = null;
+      kbBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.kb === "adjacent"));
+      if (sandboxInput) sandboxInput.value = `${sandboxInput.value}${k}`.slice(-24);
+      renderKb(k);
+      return true;
+    };
 
     kbBtns.forEach((b) =>
       b.addEventListener("click", () => {
@@ -1204,6 +1344,8 @@
         setSidebarVisible(!state.sidebarVisible);
       } else if (e.key === "f" || e.key === "F") {
         dom.fullscreenBtn.click();
+      } else if (state.currentMod === 6 && /^[a-z]$/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (state.triggerMod7Key && state.triggerMod7Key(e.key)) e.preventDefault();
       }
     });
   }

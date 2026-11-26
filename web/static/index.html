@@ -548,16 +548,24 @@
             <div class="s7-grid">
               <div class="panel-card is-revealed" data-step="0">
                 <div class="card-bar">
-                  <span id="kb-sim-caption" class="tag tag-blue">点击任意字母查看 1/dist^2 邻键权重波纹</span>
+                  <span id="kb-sim-caption" class="tag tag-blue">悬停 / 点击 / 实机敲击全 26 键查看 1/dist^2 权重</span>
                   <div class="seg-group">
                     <button class="seg-btn kb-mode-btn is-active" type="button" data-kb="adjacent">邻键蹭键</button>
                     <button class="seg-btn kb-mode-btn" type="button" data-kb="abbr">整句简拼</button>
                     <button class="seg-btn kb-mode-btn" type="button" data-kb="jieba">整词丢字</button>
                   </div>
                 </div>
-                <div id="qwerty-heatmap" class="qwerty-board"></div>
+                <div class="kb-stage-box">
+                  <div id="qwerty-heatmap" class="qwerty-board"></div>
+                  <div class="kb-sandbox-bar">
+                    <label class="kb-sb-lbl" for="kb-sandbox-input">实机全 26 键试打</label>
+                    <input id="kb-sandbox-input" class="kb-sb-input" type="text" maxlength="24" placeholder="在此直接输入拼音 (含 B/F/M 全 26 键) 体验实时误触..." autocomplete="off" />
+                    <button id="kb-sample-btn" class="mini-btn" type="button">触发误触采样</button>
+                    <button id="kb-clear-btn" class="mini-btn" type="button">清空</button>
+                  </div>
+                </div>
                 <div id="kb-formula-note" class="ime-window">
-                  <div class="ime-cand is-winner">点击键盘 G / N / W 等键观察二维物理坐标蹭键概率</div>
+                  <div class="ime-cand is-winner">全键盘任一键均可交互：观察真实 2D 欧氏距离 dist &lt;= 1.55 的归一化概率</div>
                 </div>
               </div>
 

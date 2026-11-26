@@ -55,7 +55,6 @@
       return work.slice(data.length);
     }
 
-    // ECC Level M 参数表 (Versions 1..8)
     const VERSIONS_M = [
       null,
       { v: 1, size: 21, dataCw: 16, ecPerBlock: 10, blocks: [16], align: [] },
@@ -69,7 +68,6 @@
     ];
 
     function bchFormatInfo(maskId) {
-      // ECC Level M = 00
       const data = maskId & 0x07;
       let rem = data << 10;
       const poly = 0x537;
@@ -92,30 +90,23 @@
       const bytes = new TextEncoder().encode(text);
       let spec = null;
       for (let v = 1; v < VERSIONS_M.length; v += 1) {
-        const cap = VERSIONS_M[v].dataCw - 2; // 4-bit mode + 8-bit len = 1.5 bytes -> max floor((dataCw*8 - 12)/8)
+        const cap = VERSIONS_M[v].dataCw - 2;
         if (bytes.length <= cap) {
           spec = VERSIONS_M[v];
           break;
         }
       }
-      if (!spec) {
-        spec = VERSIONS_M[VERSIONS_M.length - 1];
-      }
-      const maxBytes = spec.dataCw - 2;
-      const payload = bytes.slice(0, maxBytes);
+      if (!spec) spec = VERSIONS_M[VERSIONS_M.length - 1];
+      const payload = bytes.slice(0, spec.dataCw - 2);
 
       const bits = [];
       const pushBits = (val, len) => {
-        for (let i = len - 1; i >= 0; i -= 1) {
-          bits.push((val >> i) & 1);
-        }
+        for (let i = len - 1; i >= 0; i -= 1) bits.push((val >> i) & 1);
       };
 
-      pushBits(0b0100, 4); // Byte mode
+      pushBits(0b0100, 4);
       pushBits(payload.length, 8);
-      for (let i = 0; i < payload.length; i += 1) {
-        pushBits(payload[i], 8);
-      }
+      for (let i = 0; i < payload.length; i += 1) pushBits(payload[i], 8);
 
       const maxDataBits = spec.dataCw * 8;
       const termLen = Math.min(4, maxDataBits - bits.length);
@@ -135,7 +126,6 @@
         padIdx += 1;
       }
 
-      // 分块与 RS 纠错码生成
       const dataBlocks = [];
       const ecBlocks = [];
       let offset = 0;
@@ -146,7 +136,6 @@
         ecBlocks.push(rsComputeEc(chunk, spec.ecPerBlock));
       }
 
-      // 交织
       const finalCw = [];
       const maxBlockLen = Math.max(...spec.blocks);
       for (let i = 0; i < maxBlockLen; i += 1) {
@@ -155,9 +144,7 @@
         }
       }
       for (let i = 0; i < spec.ecPerBlock; i += 1) {
-        for (const ecBlk of ecBlocks) {
-          finalCw.push(ecBlk[i]);
-        }
+        for (const ecBlk of ecBlocks) finalCw.push(ecBlk[i]);
       }
 
       const size = spec.size;
@@ -187,28 +174,23 @@
       drawFinder(0, size - 7);
       drawFinder(size - 7, 0);
 
-      // 对齐图形
-      const centers = spec.align;
-      for (const cr of centers) {
-        for (const cc of centers) {
+      for (const cr of spec.align) {
+        for (const cc of spec.align) {
           if (reserved[cr][cc]) continue;
           for (let dr = -2; dr <= 2; dr += 1) {
             for (let dc = -2; dc <= 2; dc += 1) {
               const onEdge = Math.abs(dr) === 2 || Math.abs(dc) === 2;
-              const isCenter = dr === 0 && dc === 0;
-              setMod(cr + dr, cc + dc, onEdge || isCenter, true);
+              setMod(cr + dr, cc + dc, onEdge || (dr === 0 && dc === 0), true);
             }
           }
         }
       }
 
-      // 定位线
       for (let i = 8; i < size - 8; i += 1) {
         if (!reserved[6][i]) setMod(6, i, i % 2 === 0, true);
         if (!reserved[i][6]) setMod(i, 6, i % 2 === 0, true);
       }
 
-      // Dark module + 格式保留区
       setMod(size - 8, 8, 1, true);
       for (let i = 0; i < 9; i += 1) {
         if (!reserved[8][i]) reserved[8][i] = 1;
@@ -219,7 +201,6 @@
         reserved[size - 1 - i][8] = 1;
       }
 
-      // Version 7+ 版本信息区
       if (spec.v >= 7) {
         const verBits = bchVersionInfo(spec.v);
         for (let i = 0; i < 18; i += 1) {
@@ -231,7 +212,6 @@
         }
       }
 
-      // 填充数据位
       const streamBits = [];
       for (const cw of finalCw) {
         for (let b = 7; b >= 0; b -= 1) streamBits.push((cw >> b) & 1);
@@ -245,16 +225,14 @@
           for (let dx = 0; dx < 2; dx += 1) {
             const c = col - dx;
             if (!reserved[row][c]) {
-              const bit = bitIdx < streamBits.length ? streamBits[bitIdx] : 0;
+              grid[row][c] = bitIdx < streamBits.length ? streamBits[bitIdx] : 0;
               bitIdx += 1;
-              grid[row][c] = bit;
             }
           }
         }
         dir = -dir;
       }
 
-      // 8 种掩膜评估选择惩罚最低者
       const maskFns = [
         (r, c) => (r + c) % 2 === 0,
         (r) => r % 2 === 0,
@@ -309,9 +287,7 @@
         for (let r = 0; r < size - 1; r += 1) {
           for (let c = 0; c < size - 1; c += 1) {
             const v = mat[r][c];
-            if (v === mat[r][c + 1] && v === mat[r + 1][c] && v === mat[r + 1][c + 1]) {
-              score += 3;
-            }
+            if (v === mat[r][c + 1] && v === mat[r + 1][c] && v === mat[r + 1][c + 1]) score += 3;
           }
         }
         return score;
@@ -324,9 +300,7 @@
         const fn = maskFns[m];
         for (let r = 0; r < size; r += 1) {
           for (let c = 0; c < size; c += 1) {
-            if (!reserved[r][c] && fn(r, c)) {
-              mat[r][c] ^= 1;
-            }
+            if (!reserved[r][c] && fn(r, c)) mat[r][c] ^= 1;
           }
         }
         applyFormat(mat, m);
@@ -360,9 +334,7 @@
       let pathData = "";
       for (let r = 0; r < size; r += 1) {
         for (let c = 0; c < size; c += 1) {
-          if (mat[r][c] === 1) {
-            pathData += `M${c + quiet},${r + quiet}h1v1h-1z`;
-          }
+          if (mat[r][c] === 1) pathData += `M${c + quiet},${r + quiet}h1v1h-1z`;
         }
       }
       const path = document.createElementNS(ns, "path");
@@ -372,11 +344,104 @@
       return svg;
     }
 
-    return { createSvg, encodeBytes };
+    return { createSvg };
   })();
 
   /**
-   * 卡片 5 默认内置寝室实证对比占位案例（与 Issue #7 docs/cases_compare.json 字段完全一致）。
+   * 卡片 3 交互式规则编译器示例（对齐 profiler/rules_schema.py）
+   */
+  const RULE_COMPILER_DEMOS = [
+    {
+      id: "ong=on",
+      alias: "on=ong / ong->on -> ong=on",
+      example: "wuson -> 雾凇 (wusong)",
+      desc: "允许将后鼻音 ong 简写为 on，贴合快速敲击时省去末尾 g 的高频习惯，不影响原本 on 词条。",
+      algebra: ["derive/ong$/on/"],
+    },
+    {
+      id: "l=r",
+      alias: "r=l / l<->r -> l=r",
+      example: "len -> ren (认真)",
+      desc: "声母 l 与 r 双向模糊派生，适配部分方言混用或高速盲打时的声母漂移。",
+      algebra: ["derive/^l/r/", "derive/^r/l/"],
+    },
+    {
+      id: "z=zh",
+      alias: "zh=z / zh/z -> z=zh",
+      example: "zao -> zhao / zhi -> zi",
+      desc: "平翘舌声母双向互通；类似地 c=ch、s=sh 采用负向先行断言 ([^h]) 避免二次重复匹配。",
+      algebra: ["derive/^zh/z/", "derive/^z([^h])/zh$1/"],
+    },
+    {
+      id: "ju=jv",
+      alias: "u=v / jv=ju -> ju=jv",
+      example: "qv -> qu / xve -> xue",
+      desc: "兼容部分双拼/习惯把 j/q/x/y 后的 u 敲作 v 的拼写差异。",
+      algebra: ["derive/^([jqxy])u/$1v/", "derive/^([jqxy])v/$1u/"],
+    },
+    {
+      id: "zh=hz",
+      alias: "hz=zh -> zh=hz",
+      example: "hzi -> zhi / zih -> zhi",
+      desc: "纠正高速敲击时声母 zh/ch/sh 与紧随元音间的左右手时序倒置（如 changhs -> changsh）。",
+      algebra: [
+        "derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/",
+        "derive/([zcs])h([aeiu])$/$1$2h/",
+      ],
+    },
+    {
+      id: "an=na",
+      alias: "na=an -> an=na",
+      example: "dna -> dan / bna -> ban",
+      desc: "针对连打时末尾 an 误抢按成 na 的邻键时序换序，限定声母前置避免误伤正常 na 音节。",
+      algebra: ["derive/([wrtypsdfghklzcbnm])an$/$1na/"],
+    },
+  ];
+
+  /**
+   * 卡片 5 噪声模拟器演化示例（对齐 profiler/noise_simulator.py）
+   */
+  const NOISE_SIM_DEMOS = [
+    {
+      label: "我明天去吃饭",
+      steps: [
+        "目标汉字: 我 明天 去 吃饭",
+        "标准拼音: wo | ming tian | qu | chi fan",
+        "词级策略: jieba 分词后按纯首字母/前重后轻采样 -> w m t q c f",
+        "最终输入: <w m t q c f>  (或省略后鼻尾 wmxqcf)",
+      ],
+    },
+    {
+      label: "跑识别 (蹭键)",
+      steps: [
+        "目标汉字: 跑 识别",
+        "标准拼音: pao | shi bie",
+        "物理蹭键: e 在 QWERTY 附近或连打带入 n -> bie + n = bnie",
+        "最终输入: <p a o s h i b n i e>  (real_eval win_seq9)",
+      ],
+    },
+    {
+      label: "我是 (邻键)",
+      steps: [
+        "目标汉字: 我 是",
+        "标准拼音: wo | shi",
+        "二维坐标: o=(8,0), i=(7,0), dist=1.0 -> 最高邻键采样权重",
+        "最终输入: <w i s h i>  (real_eval android_seq15)",
+      ],
+    },
+    {
+      label: "过几天 (截断)",
+      steps: [
+        "目标汉字: 过 几天",
+        "标准拼音: guo | ji tian",
+        "发音截断: tian 截断为 t (前重后轻词尾衰减)",
+        "最终输入: <g u o j i t>  (real_eval win_seq48)",
+      ],
+    },
+  ];
+
+  /**
+   * 卡片 7 寝室实证对比默认数据（对齐 Issue #7 docs/cases_compare.json）
    */
   const BUILTIN_COMPARE_CASES = [
     {
@@ -385,7 +450,7 @@
       base_pred: ["我们去吃饭", "外卖小哥", "问明天出发"],
       user_a_pred: ["我明天去吃饭", "我们下去吃饭", "我先去吃饭"],
       user_b_pred: ["我们下楼吃饭", "外卖先点炒粉", "我们一起吃饭"],
-      note: "6 位声母简拼下，通用底座偏向高频常规词；本人模型优先召回校园约饭常用句式，室友模型则倾向点外卖/下楼场景。",
+      note: "6 位声母简拼下，通用底座偏向高频常规词；本人模型优先召回校园约饭常用句式，室友模型倾向点外卖/下楼场景。",
     },
     {
       context: "下周数据结构实验",
@@ -445,7 +510,7 @@
     },
   ];
 
-  const TOTAL_SLIDES = 5;
+  const TOTAL_SLIDES = 8;
   const POLL_INTERVAL_MS = 2000;
   const WALL_ROTATE_MS = 4500;
 
@@ -456,11 +521,11 @@
     recentComments: [],
     spotlightIndex: 0,
     wallPaused: false,
+    activeRuleDemoIdx: 0,
+    activeSimDemoIdx: 0,
     compareCases: BUILTIN_COMPARE_CASES,
     compareSourceLabel: "内置实证案例 (8 组)",
     currentCaseIndex: 0,
-    pollTimerId: null,
-    wallTimerId: null,
   };
 
   const el = {
@@ -480,7 +545,19 @@
     spotlightBox: document.getElementById("spotlight-box"),
     recentFeedList: document.getElementById("recent-feed-list"),
 
-    // Slide 5
+    // Slide 3 interactive compiler
+    ruleDemoTabs: document.getElementById("rule-demo-tabs"),
+    compilerRuleId: document.getElementById("compiler-rule-id"),
+    compilerAlias: document.getElementById("compiler-alias"),
+    compilerExample: document.getElementById("compiler-example"),
+    compilerDesc: document.getElementById("compiler-desc"),
+    compilerYaml: document.getElementById("compiler-yaml"),
+
+    // Slide 5 interactive noise simulator
+    simTabs: document.getElementById("sim-tabs"),
+    simPipelineView: document.getElementById("sim-pipeline-view"),
+
+    // Slide 7 compare cases
     casesSourceBadge: document.getElementById("cases-source-badge"),
     casesFileInput: document.getElementById("cases-file-input"),
     caseSelector: document.getElementById("case-selector"),
@@ -547,7 +624,7 @@
     });
   }
 
-  // ---- Slide Navigation ----
+  // ---- Navigation ----
   function renderSlideDots() {
     el.slideDots.innerHTML = "";
     for (let i = 0; i < TOTAL_SLIDES; i += 1) {
@@ -563,24 +640,21 @@
   function goToSlide(index) {
     const target = Math.max(0, Math.min(TOTAL_SLIDES - 1, index));
     state.currentSlide = target;
-
     el.slideCards.forEach((card, idx) => {
       const active = idx === target;
       card.hidden = !active;
       card.classList.toggle("is-active", active);
     });
-
     el.slideTabs.forEach((tab, idx) => {
       tab.classList.toggle("is-active", idx === target);
     });
-
     el.slideCounter.textContent = `${target + 1} / ${TOTAL_SLIDES}`;
     el.prevSlideBtn.disabled = target === 0;
     el.nextSlideBtn.disabled = target === TOTAL_SLIDES - 1;
     renderSlideDots();
   }
 
-  // ---- Slide 2: Live Interaction Wall ----
+  // ---- Slide 2: Interaction Wall ----
   function renderInteractionWall() {
     const items = state.recentComments;
     el.wallTotalCount.textContent = String(state.totalCount);
@@ -605,23 +679,17 @@
       return;
     }
 
-    if (state.spotlightIndex >= items.length) {
-      state.spotlightIndex = 0;
-    }
+    if (state.spotlightIndex >= items.length) state.spotlightIndex = 0;
     const activeItem = items[state.spotlightIndex];
     el.wallCarouselIndex.textContent = `${state.spotlightIndex + 1} / ${items.length}`;
 
-    // Render spotlight safely using DOM nodes
     el.spotlightBox.innerHTML = "";
-
     const topDiv = document.createElement("div");
     topDiv.className = "spotlight-top";
-
     const idWrap = document.createElement("div");
     const nickDiv = document.createElement("div");
     nickDiv.className = "spotlight-nick";
     nickDiv.textContent = activeItem.nickname || "Anonymous";
-
     const titleBadge = document.createElement("span");
     titleBadge.className = "spotlight-title-badge";
     titleBadge.textContent = activeItem.title || "节奏输入派";
@@ -630,7 +698,6 @@
     const timeSpan = document.createElement("span");
     timeSpan.className = "spotlight-time mono";
     timeSpan.textContent = formatShortTime(activeItem.created_at);
-
     topDiv.append(idWrap, timeSpan);
 
     const commentBox = document.createElement("blockquote");
@@ -643,7 +710,6 @@
     rulesLabel.className = "spotlight-rules-label";
     rulesLabel.textContent = "识别规则标签：";
     rulesRow.appendChild(rulesLabel);
-
     const rules = Array.isArray(activeItem.rules) ? activeItem.rules : [];
     if (rules.length > 0) {
       rules.forEach((rule) => rulesRow.appendChild(buildRuleChip(rule, true)));
@@ -653,10 +719,8 @@
       cleanChip.textContent = "标准全拼无明显偏置";
       rulesRow.appendChild(cleanChip);
     }
-
     el.spotlightBox.append(topDiv, commentBox, rulesRow);
 
-    // Render feed list
     el.recentFeedList.innerHTML = "";
     items.forEach((item, idx) => {
       const card = document.createElement("div");
@@ -668,15 +732,12 @@
 
       const head = document.createElement("div");
       head.className = "feed-item-head";
-
       const nick = document.createElement("span");
       nick.className = "feed-item-nick";
       nick.textContent = item.nickname || "Anonymous";
-
       const title = document.createElement("span");
       title.className = "feed-item-title";
       title.textContent = item.title || "节奏输入派";
-
       head.append(nick, title);
 
       const comment = document.createElement("p");
@@ -694,13 +755,65 @@
         emptyChip.textContent = "全拼稳健";
         rulesDiv.appendChild(emptyChip);
       }
-
       card.append(head, comment, rulesDiv);
       el.recentFeedList.appendChild(card);
     });
   }
 
-  // ---- Slide 5: Dorm Comparison Cases ----
+  // ---- Slide 3: Interactive Rule Compiler ----
+  function renderRuleCompilerDemo() {
+    el.ruleDemoTabs.innerHTML = "";
+    RULE_COMPILER_DEMOS.forEach((item, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `rule-demo-btn${idx === state.activeRuleDemoIdx ? " is-active" : ""}`;
+      btn.textContent = item.id;
+      btn.addEventListener("click", () => {
+        state.activeRuleDemoIdx = idx;
+        renderRuleCompilerDemo();
+      });
+      el.ruleDemoTabs.appendChild(btn);
+    });
+
+    const cur = RULE_COMPILER_DEMOS[state.activeRuleDemoIdx];
+    el.compilerRuleId.textContent = cur.id;
+    el.compilerAlias.textContent = cur.alias;
+    el.compilerExample.textContent = cur.example;
+    el.compilerDesc.textContent = cur.desc;
+    const yamlLines = [
+      "patch:",
+      "  speller/algebra/+:",
+      `    # [${cur.id}]`,
+      ...cur.algebra.map((expr) => `    - '${expr}'`),
+    ];
+    el.compilerYaml.textContent = yamlLines.join("\n");
+  }
+
+  // ---- Slide 5: Interactive Noise Simulator ----
+  function renderNoiseSimDemo() {
+    el.simTabs.innerHTML = "";
+    NOISE_SIM_DEMOS.forEach((item, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `sim-btn${idx === state.activeSimDemoIdx ? " is-active" : ""}`;
+      btn.textContent = item.label;
+      btn.addEventListener("click", () => {
+        state.activeSimDemoIdx = idx;
+        renderNoiseSimDemo();
+      });
+      el.simTabs.appendChild(btn);
+    });
+
+    const cur = NOISE_SIM_DEMOS[state.activeSimDemoIdx];
+    el.simPipelineView.innerHTML = "";
+    cur.steps.forEach((line) => {
+      const div = document.createElement("div");
+      div.textContent = line;
+      el.simPipelineView.appendChild(div);
+    });
+  }
+
+  // ---- Slide 7: Dorm Compare Cases ----
   function normalizePredList(pred) {
     if (Array.isArray(pred)) {
       return pred.slice(0, 3).map((item) => {
@@ -714,26 +827,20 @@
         return { text: String(item), score: null };
       });
     }
-    if (typeof pred === "string" && pred.trim()) {
-      return [{ text: pred.trim(), score: null }];
-    }
+    if (typeof pred === "string" && pred.trim()) return [{ text: pred.trim(), score: null }];
     return [{ text: "--", score: null }];
   }
 
   function renderPredColumn(container, pred) {
     container.innerHTML = "";
-    const list = normalizePredList(pred);
-    list.forEach((item, idx) => {
+    normalizePredList(pred).forEach((item, idx) => {
       const row = document.createElement("div");
       row.className = `pred-item${idx === 0 ? " is-top1" : ""}`;
-
       const textSpan = document.createElement("span");
       textSpan.textContent = item.text;
-
       const rankSpan = document.createElement("span");
       rankSpan.className = "pred-rank";
       rankSpan.textContent = item.score ? `Top-${idx + 1} · ${item.score}` : `Top-${idx + 1}`;
-
       row.append(textSpan, rankSpan);
       container.appendChild(row);
     });
@@ -745,7 +852,6 @@
     if (state.currentCaseIndex >= cases.length) state.currentCaseIndex = 0;
 
     el.casesSourceBadge.textContent = state.compareSourceLabel;
-
     el.caseSelector.innerHTML = "";
     cases.forEach((item, idx) => {
       const btn = document.createElement("button");
@@ -763,7 +869,6 @@
     el.caseContext.textContent = current.context || "（无前置语境）";
     el.caseRawKeys.textContent = current.raw_keys || "--";
     el.caseNote.textContent = current.note || "暂无补充说明";
-
     renderPredColumn(el.caseBasePred, current.base_pred);
     renderPredColumn(el.caseUserAPred, current.user_a_pred);
     renderPredColumn(el.caseUserBPred, current.user_b_pred);
@@ -791,8 +896,7 @@
     try {
       const resp = await fetch(customUrl, { headers: { Accept: "application/json" } });
       if (!resp.ok) return;
-      const data = await resp.json();
-      const parsed = parseCasesPayload(data);
+      const parsed = parseCasesPayload(await resp.json());
       if (parsed) {
         state.compareCases = parsed;
         state.compareSourceLabel = `已加载外部 JSON (${parsed.length} 组)`;
@@ -800,11 +904,11 @@
         renderCompareCases();
       }
     } catch {
-      // 外部路径不可达时保留内置实证案例，不在控制台抛出异常
+      // 保留内置数据
     }
   }
 
-  // ---- Right Sidebar: Real-Time Leaderboard ----
+  // ---- Right Sidebar: Leaderboard ----
   function renderLeaderboard() {
     el.lbTotalBadge.textContent = `${state.totalCount} 人完赛`;
     el.leaderboardList.innerHTML = "";
@@ -831,15 +935,12 @@
 
       const nameLine = document.createElement("div");
       nameLine.className = "lb-name-line";
-
       const nickSpan = document.createElement("span");
       nickSpan.className = "lb-nickname";
       nickSpan.textContent = row.nickname || "Anonymous";
-
       const titleSpan = document.createElement("span");
       titleSpan.className = "lb-title-pill";
       titleSpan.textContent = row.title || "节奏输入派";
-
       nameLine.append(nickSpan, titleSpan);
 
       const rulesDiv = document.createElement("div");
@@ -853,21 +954,18 @@
         cleanTag.textContent = "标准全拼";
         rulesDiv.appendChild(cleanTag);
       }
-
       mainDiv.append(nameLine, rulesDiv);
 
       const metricsDiv = document.createElement("div");
       metricsDiv.className = "lb-metrics mono";
-
       const scoreSpan = document.createElement("span");
       scoreSpan.className = "lb-score";
       scoreSpan.textContent = `${Number(row.score || 0).toFixed(1)} 分`;
-
       const subSpan = document.createElement("span");
       subSpan.className = "lb-submetrics";
       subSpan.textContent = `${Number(row.cpm || 0).toFixed(0)} 键/分 · ${Number(row.accuracy || 0).toFixed(1)}%`;
-
       metricsDiv.append(scoreSpan, subSpan);
+
       rowEl.append(rankBadge, mainDiv, metricsDiv);
       el.leaderboardList.appendChild(rowEl);
     });
@@ -897,11 +995,9 @@
       state.totalCount = Number(data.total || 0);
       state.leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
       state.recentComments = Array.isArray(data.recent_comments) ? data.recent_comments : [];
-
       if (state.recentComments[0]?.id && state.recentComments[0].id !== prevTopId) {
         state.spotlightIndex = 0;
       }
-
       setLiveStatus(true, "2s 同步中");
       renderLeaderboard();
       renderInteractionWall();
@@ -912,19 +1008,15 @@
 
   // ---- Fullscreen & Reset Modal ----
   function updateFullscreenLabel() {
-    const isFull = Boolean(document.fullscreenElement);
-    el.fullscreenBtn.textContent = isFull ? "退出全屏" : "全屏演示";
+    el.fullscreenBtn.textContent = document.fullscreenElement ? "退出全屏" : "全屏";
   }
 
   async function toggleFullscreen() {
     try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      else await document.exitFullscreen();
     } catch {
-      // 某些内嵌浏览器环境限制全屏时静默忽略
+      // ignore
     }
     updateFullscreenLabel();
   }
@@ -950,7 +1042,6 @@
       el.resetFeedback.textContent = "请输入管理员口令。";
       return;
     }
-
     try {
       const resp = await fetch("/api/reset", {
         method: "POST",
@@ -1009,9 +1100,7 @@
   }
 
   function bindEvents() {
-    el.slideTabs.forEach((tab, idx) => {
-      tab.addEventListener("click", () => goToSlide(idx));
-    });
+    el.slideTabs.forEach((tab, idx) => tab.addEventListener("click", () => goToSlide(idx)));
     el.prevSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide - 1));
     el.nextSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide + 1));
     el.fullscreenBtn.addEventListener("click", toggleFullscreen);
@@ -1031,14 +1120,13 @@
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
         goToSlide(state.currentSlide - 1);
-      } else if (e.key >= "1" && e.key <= "5") {
+      } else if (e.key >= "1" && e.key <= String(TOTAL_SLIDES)) {
         goToSlide(Number(e.key) - 1);
       } else if (e.key === "f" || e.key === "F") {
         toggleFullscreen();
       }
     });
 
-    // Slide 2 wall controls
     el.wallToggleBtn.addEventListener("click", () => {
       state.wallPaused = !state.wallPaused;
       el.wallToggleBtn.textContent = state.wallPaused ? "恢复轮播" : "暂停轮播";
@@ -1050,7 +1138,6 @@
       }
     });
 
-    // Slide 5 case navigation & JSON file loader
     el.prevCaseBtn.addEventListener("click", () => {
       const len = state.compareCases.length;
       state.currentCaseIndex = (state.currentCaseIndex - 1 + len) % len;
@@ -1065,8 +1152,7 @@
       const file = e.target.files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
-        const parsed = parseCasesPayload(JSON.parse(text));
+        const parsed = parseCasesPayload(JSON.parse(await file.text()));
         if (parsed) {
           state.compareCases = parsed;
           state.compareSourceLabel = `${file.name} (${parsed.length} 组)`;
@@ -1074,16 +1160,13 @@
           renderCompareCases();
         }
       } catch {
-        // 文件格式异常时保持现有案例
+        // ignore invalid file
       } finally {
         el.casesFileInput.value = "";
       }
     });
 
-    // Copy play link
     el.copyPlayUrlBtn.addEventListener("click", copyPlayUrl);
-
-    // Reset modal
     el.resetTriggerBtn.addEventListener("click", openResetModal);
     el.resetCloseBtn.addEventListener("click", closeResetModal);
     el.resetCancelBtn.addEventListener("click", closeResetModal);
@@ -1096,6 +1179,8 @@
   function init() {
     renderQrCode();
     goToSlide(0);
+    renderRuleCompilerDemo();
+    renderNoiseSimDemo();
     renderCompareCases();
     renderInteractionWall();
     bindEvents();
@@ -1103,8 +1188,8 @@
     loadExternalCasesIfSpecified();
     fetchLeaderboard();
 
-    state.pollTimerId = window.setInterval(fetchLeaderboard, POLL_INTERVAL_MS);
-    state.wallTimerId = window.setInterval(() => {
+    window.setInterval(fetchLeaderboard, POLL_INTERVAL_MS);
+    window.setInterval(() => {
       if (!state.wallPaused && state.recentComments.length > 1) {
         state.spotlightIndex = (state.spotlightIndex + 1) % state.recentComments.length;
         renderInteractionWall();

@@ -1,8 +1,10 @@
 (function () {
   "use strict";
 
+  const STAGE_WIDTH = 1920;
+  const STAGE_HEIGHT = 1080;
   const POLL_INTERVAL_MS = 2000;
-  const INTERACTIVE_SEC_INDEX = 4; // Section 05 triggers live right sidebar
+  const INTERACTIVE_MOD_INDEX = 4; // Auto-open right sidebar at Module 05
 
   // ---------------------------------------------------------------------------
   // Content Data
@@ -11,43 +13,45 @@
     {
       keys: "qian'd'l'kuai'q'c",
       cands: [
-        { rank: 1, text: "钱多了快去吃", note: "第 1 次未记住自造句", cls: "is-miss" },
-        { rank: 2, text: "签到了快起床", note: "正确意图屈居第 2", cls: "" },
+        { rank: 1, text: "钱多了快去吃", note: "第 1 次打全仍偏离", cls: "is-miss" },
+        { rank: 2, text: "签到了快起床", note: "屈居第 2", cls: "" },
         { rank: 3, text: "签到了快去吃", note: "", cls: "" },
       ],
-      caption: "目标整句是「签到了快起床」；第 1 次哪怕打全 kuai，仍然容易被通用高频词库带偏。",
+      caption:
+        "对自造句第一次打效果往往不如意；一旦纠正上屏，第二次即便省敲成 qian'd'l'k'q'c 也能靠上下文预测推到第一。",
     },
     {
       keys: "qian'd'l'k'q'c",
       cands: [
-        { rank: 1, text: "签到了快起床", note: "省去 uai 仍直接跃迁首选", cls: "is-winner anim-rank-pop" },
+        { rank: 1, text: "签到了快起床", note: "省掉 uai 仍直接跃迁首选", cls: "is-winner anim-rank-pop" },
         { rank: 2, text: "签订了看清楚", note: "", cls: "" },
         { rank: 3, text: "签到了", note: "", cls: "" },
       ],
-      caption: "纠正上屏一次后，第 2 次省打成 k，仍依据个人上下文直接记忆「签到了快起床」。",
+      caption:
+        "纠正上屏一次后，第 2 次直接省敲成 single-letter k，仍依据个人上下文把「签到了快起床」推回第 1 位。",
     },
   ];
 
   const WT_STAGES = [
     [
-      { title: "简拼 / 漏敲兼容", body: "同时支持首字母简拼 (wmxqcf)、漏介母 (kai->kuai) 与音节换序。" },
-      { title: "2D 键盘坐标分布", body: "以二维高斯模型 P(x,y|k) 度量物理点击距离，识别顺带蹭键。" },
-      { title: "上下文决定上限", body: "省键越多越不完整，就越依靠上文语言模型概率反超惩罚。" },
+      { title: "简拼 / 漏敲兼容", body: "同时兼容首字母简拼 (wmxqcf)、漏介母 (kai->kuai) 与音节换序。" },
+      { title: "2D 键盘坐标分布", body: "以二维高斯 P(x,y|k) 度量物理点击位置，容错手指误触旁键。" },
+      { title: "上下文先验反超", body: "输入越省键、物理残缺越多，越依赖个人历史语境概率翻盘。" },
     ],
     [
-      { title: "模糊路径并联展开", body: "在同一张有向无环图 (DAG) 中并行展开标准音与易混音路径。" },
-      { title: "无空格音节切分", body: "不强制打分词空格，动态规划切出每一种合法汉字读音拼接。" },
-      { title: "Trie 边界剪枝", body: "借助汉字拼音前缀树裁掉不合法字符组合，收敛计算宽度。" },
+      { title: "模糊路径并联", body: "在同一张有向无环图 (DAG) 中并行展开标准音与易混音路径。" },
+      { title: "无空格音节切分", body: "不依赖分词空格，动态规划切出每一种合法汉字读音序列。" },
+      { title: "前缀 Trie 收敛", body: "用汉字读音 Trie 裁掉非法字母组合，收束计算图宽度。" },
     ],
     [
-      { title: "L1 本地静态大词库 (< 5ms)", body: "百兆静态大词库「以空间换时间」，命中约 80% 常规词语。" },
-      { title: "L2 端侧神经 LM (10~30ms)", body: "几十 MB 量化神经网络结合长句子上下文进行 Top-K 重排。" },
-      { title: "L3 云端大模型异步补强", body: "重度简拼与长句联想异步回传云端——这是输入隐私最敏感的边界。", warn: true },
+      { title: "L1 本地大词库 (< 5ms)", body: "百兆静态大词库「空间换时间」，命中约 80% 常规高频输入。" },
+      { title: "L2 端侧神经 LM (10~30ms)", body: "几十 MB 量化神经网络结合上下文对 Top-K 做语义联合重排。" },
+      { title: "L3 云端大模型补强", body: "重度简拼与长上下文异步上传云端补全——输入隐私最敏感的边界。", warn: true },
     ],
     [
-      { title: "W* = argmax P(W|Ctx) × P(K|W)", body: "数学核心统一为上下文先验与按键生成似然的乘积。" },
-      { title: "固定策略与体积痛点", body: "商用通用大词库体积重、难按单人自造词癖长期精准调校。", warn: true },
-      { title: "Personal-IME 的开源解法", body: "开源 Rime + 3 句规则冷启动 + 500 滑窗自进化 + 个人端侧小模型。" },
+      { title: "公式统一本质", body: "W* = argmax [ log P_LM(W|Ctx) + log P_Key(K|W) ]。" },
+      { title: "策略固化与体积代价", body: "通用大词库占用沉重，也无法面向单个人的冷门造句长期私密定制。", warn: true },
+      { title: "Personal-IME 破局", body: "全本地开源闭环：3 句规则冷启动 + 500 滑窗自切换 + 端侧小模型。" },
     ],
   ];
 
@@ -63,23 +67,23 @@
   const BRIDGE_NODES = [
     {
       title: "NODE 01 · 末尾敲 ` 按需触发（rime/lua/ai_filter.lua）",
-      desc: "平时 99% 常规打字完全走 Rime + 雾凇原生 0ms 路线；只在敲击串以反引号 ` 结尾且至少 1 个字母时，截取前 28 个已上屏汉字唤醒本地模型。",
-      badges: ["平时 0 额外延迟", "28 字上下文窗口", "反引号 ` 按需唤醒"],
+      desc: "平时 99% 常规打字完全走 Rime + 雾凇原生 0ms 路线。只有敲击串以反引号 ` 结尾且至少 1 个字母时，提取前 28 个已上屏汉字上下文，唤醒本地小模型。",
+      badges: ["平时 0 额外延迟", "28 字符上下文窗口", "反引号 ` 按需唤醒"],
     },
     {
       title: "NODE 02 · Winsock2 非阻塞 C 桥接（ime_bridge.dll）",
-      desc: "纯 C 编写 Winsock2 客户端，禁用 Nagle 算法（TCP_NODELAY），15ms 非阻塞连接 + 硬超时保护，彻底告别弹出黑框或打断输入。",
+      desc: "纯 C 编写 Winsock2 客户端，禁用 Nagle 算法（TCP_NODELAY），设置 15ms 非阻塞 connect 与硬超时保护，零黑框弹出且绝不卡顿。",
       badges: ["Winsock2 DLL", "TCP_NODELAY", "15ms 硬超时保护"],
     },
     {
       title: "NODE 03 · 8105 汉字读音 Trie 硬约束（model/ime_server.py）",
-      desc: "基于 8105 字表对 Qwen3 词表建前缀树，精确 0.0 / 前缀 0.9 / 换序 2.8 / 缺介母 3.0 / 邻键蹭键 3.2，配合 DynamicCache 复用前缀 KV。",
-      badges: ["8105 汉字读音硬约束", "DynamicCache 前缀缓存", "单步<=4.5 / 整句<=7.0"],
+      desc: "按 8105 字表对 Qwen3 词表建前缀树，精确 0.0 / 前缀 0.9 / 换序 2.8 / 缺介母 3.0 / 邻键蹭键 3.2，配合 DynamicCache 复用前缀 KV。",
+      badges: ["8105 汉字读音硬锁", "DynamicCache 前缀缓存", "单步 <= 4.5 / 整句 <= 7.0"],
     },
     {
-      title: "NODE 04 · 候选注入与 0.1ms 无感回落",
-      desc: "服务端返回候选直接推上首选并附 [AI] 轻标注；即使服务未启动或超时，C 桥接在 0.1ms 内立即回落至原生雾凇候选。",
-      badges: ["首选直接注入", "0.1ms 无感回落", "绝不卡住键盘"],
+      title: "NODE 04 · 首推注入与 0.1ms 无感回落",
+      desc: "服务端 Top-K 结果直接注入首选并附带 [AI] 轻标注；若服务未启或超时，C 桥接在 0.1ms 内静默回落雾凇原生候选。",
+      badges: ["首选直接注入", "0.1ms 无感回落", "绝不卡死输入法"],
     },
   ];
 
@@ -89,16 +93,16 @@
       raw_keys: "wmxqcf",
       base_pred: "1. 我们先去吃饭  2. 为什么去采访",
       user_a_pred: "1. 我明天去吃饭（室友常约次日餐）",
-      user_b_pred: "1. 我马上写代码去食堂（作息差异）",
-      note: "全声母重度简拼 wmxqcf，通用词库几乎无法猜中；微调后直接结合室友高频表达排序。",
+      user_b_pred: "1. 我马上写代码去食堂（A/B 习惯差异）",
+      note: "全声母重度简拼 wmxqcf，通用词库几乎无法猜中；微调后直接结合室友日常高频表达排序。",
     },
     {
       context: "晚上回寝室记得",
       raw_keys: "paoshibnie",
       base_pred: "1. 跑失别（乱码切分）",
       user_a_pred: "1. 泡十遍了（蹭键 b/n 纠偏）",
-      user_b_pred: "1. 泡方便面（旁键物理坐标加习惯）",
-      note: "出现 b/n 物理邻键顺带蹭键，2D 键距惩罚结合个人习惯拉回第 1。",
+      user_b_pred: "1. 泡方便面（旁键物理坐标加日常习惯）",
+      note: "出现 b/n 物理邻键顺带蹭键，2D 键距惩罚结合个人习惯把真实意图拉回第 1。",
     },
     {
       context: "导员在群里催",
@@ -106,7 +110,7 @@
       base_pred: "1. 钱多了快去吃  2. 签订了看清楚",
       user_a_pred: "1. 签到了快起床",
       user_b_pred: "1. 签到了快去传",
-      note: "同学 A 常发早起签到提醒；同学 B 常交实验报告，同输入输出截然不同。",
+      note: "同学 A 常打早起签到提醒；同学 B 常交实验报告，相同省键输入分化出完全不同首选。",
     },
     {
       context: "这周进度太慢",
@@ -120,9 +124,9 @@
       context: "先把这个",
       raw_keys: "gnsxie",
       base_pred: "1. 概念写  2. 给你写",
-      user_a_pred: "1. 功能实现（专业词汇高频）",
+      user_a_pred: "1. 功能实现（专业高频短语）",
       user_b_pred: "1. 观念写下来",
-      note: "专业高频短语注入 LoRA 后压过通用生活词汇。",
+      note: "跨专业语料微调后，专业词组显著压过通用生活词。",
     },
     {
       context: "明天早上记得",
@@ -130,23 +134,23 @@
       base_pred: "1. 打麻去了  2. 点名起了",
       user_a_pred: "1. 点名起来（寝室互喊早八）",
       user_b_pred: "1. 导明起了",
-      note: "极短 4 键简拼极度依赖个体作息分布。",
+      note: "极短 4 键简拼 dmql 极度依赖个体作息分布。",
     },
     {
       context: "这个脚本刚跑",
       raw_keys: "baoco",
       base_pred: "1. 保错  2. 抱错",
-      user_a_pred: "1. 报错了（缺 u 声调纠偏）",
+      user_a_pred: "1. 报错了（缺 u 声调语癖修正）",
       user_b_pred: "1. 报酬",
-      note: "漏敲尾键叠加语境消歧。",
+      note: "漏敲尾键叠加专业上下文消歧。",
     },
     {
       context: "刚才发错群了",
       raw_keys: "chhuai",
       base_pred: "1. 撤回（未命中完整 chehui）",
-      user_a_pred: "1. 撤回啊（c/ch 误触修正）",
+      user_a_pred: "1. 撤回啊（c/ch + e/u 误触修正）",
       user_b_pred: "1. 出坏了",
-      note: "非标准拼音错拼在 8105 Trie 惩罚预算内纠正。",
+      note: "非标准错拼在 8105 Trie 惩罚预算内实现纠偏。",
     },
   ];
 
@@ -165,9 +169,7 @@
     }
     for (let i = 255; i < 512; i += 1) GF_EXP[i] = GF_EXP[i - 255];
 
-    function gfMul(a, b) {
-      return a === 0 || b === 0 ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]];
-    }
+    const gfMul = (a, b) => (a === 0 || b === 0 ? 0 : GF_EXP[GF_LOG[a] + GF_LOG[b]]);
 
     function rsCompute(data, ecCount) {
       let poly = [1];
@@ -183,9 +185,7 @@
       res.set(data, 0);
       for (let i = 0; i < data.length; i += 1) {
         const c = res[i];
-        if (c !== 0) {
-          for (let j = 0; j < poly.length; j += 1) res[i + j] ^= gfMul(poly[j], c);
-        }
+        if (c !== 0) for (let j = 0; j < poly.length; j += 1) res[i + j] ^= gfMul(poly[j], c);
       }
       return res.slice(data.length);
     }
@@ -203,9 +203,7 @@
       const data = mask & 7;
       let rem = data << 10;
       const poly = 0b10100110111;
-      for (let b = 14; b >= 10; b -= 1) {
-        if ((rem >> b) & 1) rem ^= poly << (b - 10);
-      }
+      for (let b = 14; b >= 10; b -= 1) if ((rem >> b) & 1) rem ^= poly << (b - 10);
       return ((data << 10) | rem) ^ 0b101010000010010;
     }
 
@@ -335,7 +333,7 @@
   // State & DOM
   // ---------------------------------------------------------------------------
   const state = {
-    currentSection: 0,
+    currentMod: 0,
     sidebarVisible: false,
     jumpStack: [],
     selectedRules: new Set(["fuzzy_z_zh", "fuzzy_eng_en", "fuzzy_ong_on"]),
@@ -348,25 +346,27 @@
     knownRanks: new Map(),
     pollTimer: null,
     hystAutoTimer: null,
-    scrollLockUntil: 0,
+    typingTimer: null,
   };
 
   const dom = {
     shell: document.getElementById("stage-shell"),
     main: document.getElementById("stage-main"),
-    sections: Array.from(document.querySelectorAll(".story-section")),
-    spineDots: Array.from(document.querySelectorAll(".spine-dot")),
-    spineFill: document.getElementById("spine-fill"),
+    stage: document.getElementById("deck-stage"),
+    modules: Array.from(document.querySelectorAll(".module")),
     hudChapter: document.getElementById("hud-chapter-name"),
-    slideCounter: document.getElementById("slide-counter"),
+    hudLoopTag: document.getElementById("hud-loop-tag"),
+    toggleMapBtn: document.getElementById("toggle-map-btn"),
+    mapOverlay: document.getElementById("loop-map-overlay"),
+    closeMapBtn: document.getElementById("close-map-btn"),
+    topoNodes: Array.from(document.querySelectorAll(".topo-node")),
+    jumpBackBtn: document.getElementById("jump-back-btn"),
+    jumpBackLabel: document.getElementById("jump-back-label"),
     prevBtn: document.getElementById("prev-slide-btn"),
     nextBtn: document.getElementById("next-slide-btn"),
     revealAllBtn: document.getElementById("reveal-all-btn"),
     toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
-    jumpBackBar: document.getElementById("jump-back-bar"),
-    jumpBackBtn: document.getElementById("jump-back-btn"),
-    jumpBackLabel: document.getElementById("jump-back-label"),
     sidebar: document.getElementById("stage-right"),
     qrContainer: document.getElementById("qr-container"),
     playUrlText: document.getElementById("play-url-text"),
@@ -391,118 +391,87 @@
   };
 
   // ---------------------------------------------------------------------------
-  // Continuous Story Flow Navigation & Jump History Stack
+  // Fixed 1920x1080 Uniform Scaling & Depth-of-Field Module Navigation
   // ---------------------------------------------------------------------------
+  function rescaleDeckStage() {
+    const rect = dom.main.getBoundingClientRect();
+    const availW = Math.max(320, rect.width);
+    const availH = Math.max(240, rect.height);
+    const scale = Math.min(availW / STAGE_WIDTH, availH / STAGE_HEIGHT);
+    const offsetX = (availW - STAGE_WIDTH * scale) / 2;
+    const offsetY = (availH - STAGE_HEIGHT * scale) / 2;
+    dom.stage.style.transform = `translate3d(${offsetX.toFixed(2)}px, ${offsetY.toFixed(2)}px, 0) scale(${scale.toFixed(5)})`;
+  }
+
   function setSidebarVisible(visible) {
     state.sidebarVisible = Boolean(visible);
     dom.sidebar.hidden = !state.sidebarVisible;
     dom.shell.classList.toggle("is-sidebar-hidden", !state.sidebarVisible);
     dom.toggleSidebarBtn.textContent = state.sidebarVisible ? "隐藏榜单" : "显示榜单";
+    requestAnimationFrame(rescaleDeckStage);
   }
 
-  function updateActiveSectionUI(idx) {
-    state.currentSection = idx;
-    const sec = dom.sections[idx];
-    if (!sec) return;
-    dom.hudChapter.textContent = sec.dataset.title || `0${idx + 1}`;
-    dom.slideCounter.textContent = `${idx + 1} / ${dom.sections.length}`;
-    dom.spineDots.forEach((d, i) => d.classList.toggle("is-active", i === idx));
-    dom.spineFill.style.height = `${Math.round(((idx + 1) / dom.sections.length) * 100)}%`;
+  function refreshJumpBackButton() {
+    if (state.jumpStack.length === 0) {
+      dom.jumpBackBtn.hidden = true;
+      return;
+    }
+    const top = state.jumpStack[state.jumpStack.length - 1];
+    dom.jumpBackLabel.textContent = top.note || `返回：${top.title}`;
+    dom.jumpBackBtn.hidden = false;
+  }
 
-    if (idx >= INTERACTIVE_SEC_INDEX && !state.sidebarVisible) {
+  function navigateToModule(targetIdx, { direction = "auto", recordJump = false, returnNote = "" } = {}) {
+    const idx = Math.max(0, Math.min(dom.modules.length - 1, targetIdx));
+    if (idx === state.currentMod) return;
+
+    const prevIdx = state.currentMod;
+    if (recordJump) {
+      const origin = dom.modules[prevIdx];
+      state.jumpStack.push({
+        modIdx: prevIdx,
+        title: (origin && origin.dataset.title) || `0${prevIdx + 1}`,
+        note: returnNote,
+      });
+      refreshJumpBackButton();
+    }
+
+    const forward = direction === "forward" || (direction === "auto" && idx > prevIdx);
+    state.currentMod = idx;
+
+    dom.modules.forEach((mod, i) => {
+      mod.classList.remove("is-leaving-forward", "is-leaving-back", "is-active");
+      if (i === prevIdx) {
+        mod.classList.add(forward ? "is-leaving-forward" : "is-leaving-back");
+      } else if (i === idx) {
+        mod.classList.add("is-active");
+      }
+    });
+
+    const active = dom.modules[idx];
+    dom.hudChapter.textContent = active.dataset.title || `0${idx + 1}`;
+    dom.hudLoopTag.textContent = active.dataset.loop || "";
+    dom.topoNodes.forEach((n) => n.classList.toggle("is-current", Number(n.dataset.topo) === idx));
+
+    dom.prevBtn.disabled = idx === 0;
+    dom.nextBtn.disabled = idx === dom.modules.length - 1;
+
+    if (idx >= INTERACTIVE_MOD_INDEX && !state.sidebarVisible) {
       setSidebarVisible(true);
     }
     updateRevealButtonLabel();
   }
 
-  function scrollToSection(targetIdx, { recordJump = false, returnNote = "" } = {}) {
-    const idx = Math.max(0, Math.min(dom.sections.length - 1, targetIdx));
-    const targetSec = dom.sections[idx];
-    if (!targetSec) return;
-
-    if (recordJump) {
-      const originSec = dom.sections[state.currentSection];
-      state.jumpStack.push({
-        scrollTop: dom.main.scrollTop,
-        originIdx: state.currentSection,
-        label: returnNote || `返回：${(originSec && originSec.dataset.title) || "上一讲解位置"}`,
-      });
-      refreshJumpBackBar();
-    }
-
-    state.scrollLockUntil = Date.now() + 750;
-    targetSec.scrollIntoView({ behavior: "smooth", block: "start" });
-    updateActiveSectionUI(idx);
-    targetSec.classList.add("is-inview", "is-flash");
-    setTimeout(() => targetSec.classList.remove("is-flash"), 950);
-  }
-
-  function refreshJumpBackBar() {
-    if (state.jumpStack.length === 0) {
-      dom.jumpBackBar.hidden = true;
-      return;
-    }
-    const top = state.jumpStack[state.jumpStack.length - 1];
-    dom.jumpBackLabel.textContent = top.label;
-    dom.jumpBackBar.hidden = false;
-  }
-
   function popJumpBack() {
     if (state.jumpStack.length === 0) return false;
     const prev = state.jumpStack.pop();
-    refreshJumpBackBar();
-    state.scrollLockUntil = Date.now() + 750;
-    dom.main.scrollTo({ top: prev.scrollTop, behavior: "smooth" });
-    updateActiveSectionUI(prev.originIdx);
-    const origin = dom.sections[prev.originIdx];
-    if (origin) {
-      origin.classList.add("is-flash");
-      setTimeout(() => origin.classList.remove("is-flash"), 950);
-    }
+    refreshJumpBackButton();
+    navigateToModule(prev.modIdx, { direction: "back", recordJump: false });
     return true;
   }
 
-  // Track visible sections deterministically on scroll & intersection
-  function syncSectionFromScroll() {
-    const cRect = dom.main.getBoundingClientRect();
-    const anchorY = cRect.top + Math.min(220, cRect.height * 0.28);
-    let activeIdx = state.currentSection;
-
-    dom.sections.forEach((sec, idx) => {
-      const r = sec.getBoundingClientRect();
-      if (r.top < cRect.bottom - 60 && r.bottom > cRect.top + 60) {
-        sec.classList.add("is-inview");
-      }
-      if (r.top <= anchorY && r.bottom > anchorY) {
-        activeIdx = idx;
-      }
-    });
-
-    if (Date.now() >= state.scrollLockUntil && activeIdx !== state.currentSection) {
-      updateActiveSectionUI(activeIdx);
-    }
-  }
-
-  function initScrollObserver() {
-    let rafPending = false;
-    dom.main.addEventListener("scroll", () => {
-      if (rafPending) return;
-      rafPending = true;
-      requestAnimationFrame(() => {
-        rafPending = false;
-        syncSectionFromScroll();
-      });
-    });
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("is-inview");
-        });
-        syncSectionFromScroll();
-      },
-      { root: dom.main, threshold: [0.05, 0.25] }
-    );
-    dom.sections.forEach((s) => observer.observe(s));
+  function setMapOverlayVisible(open) {
+    dom.mapOverlay.hidden = !open;
   }
 
   // ---------------------------------------------------------------------------
@@ -516,15 +485,15 @@
   }
 
   function revealNextInCurrent() {
-    const sec = dom.sections[state.currentSection];
-    if (!sec) return false;
-    const veiled = Array.from(sec.querySelectorAll("[data-step].is-veiled"));
+    const mod = dom.modules[state.currentMod];
+    if (!mod) return false;
+    const veiled = Array.from(mod.querySelectorAll("[data-step].is-veiled"));
     if (veiled.length > 0) {
       veiled.sort((a, b) => Number(a.dataset.step) - Number(b.dataset.step));
       revealElement(veiled[0]);
       return true;
     }
-    if (state.currentSection === 8 && state.revealStep < 3) {
+    if (state.currentMod === 8 && state.revealStep < 3) {
       advanceModelReveal();
       return true;
     }
@@ -532,10 +501,10 @@
   }
 
   function revealAllInCurrent() {
-    const sec = dom.sections[state.currentSection];
-    if (!sec) return;
-    sec.querySelectorAll("[data-step].is-veiled").forEach(revealElement);
-    if (state.currentSection === 8) {
+    const mod = dom.modules[state.currentMod];
+    if (!mod) return;
+    mod.querySelectorAll("[data-step].is-veiled").forEach(revealElement);
+    if (state.currentMod === 8) {
       state.revealStep = 3;
       applyModelRevealState();
     }
@@ -543,27 +512,31 @@
   }
 
   function updateRevealButtonLabel() {
-    const sec = dom.sections[state.currentSection];
-    if (!sec) return;
-    const hasVeiled = sec.querySelectorAll("[data-step].is-veiled").length > 0;
-    const hasConceal = state.currentSection === 8 && state.revealStep < 3;
+    const mod = dom.modules[state.currentMod];
+    if (!mod) return;
+    const hasVeiled = mod.querySelectorAll("[data-step].is-veiled").length > 0;
+    const hasConceal = state.currentMod === 8 && state.revealStep < 3;
     dom.revealAllBtn.textContent = hasVeiled || hasConceal ? "展开本节" : "已全展开";
   }
 
   // ---------------------------------------------------------------------------
-  // Section Demonstrations & Animations
+  // Interactive Module Demos & Animations
   // ---------------------------------------------------------------------------
   function animateTyping(el, targetText) {
+    if (state.typingTimer) clearInterval(state.typingTimer);
     let i = 1;
     el.textContent = targetText.slice(0, i);
-    const id = setInterval(() => {
+    state.typingTimer = setInterval(() => {
       i += 1;
       el.textContent = targetText.slice(0, i);
-      if (i >= targetText.length) clearInterval(id);
+      if (i >= targetText.length) {
+        clearInterval(state.typingTimer);
+        state.typingTimer = null;
+      }
     }, 65);
   }
 
-  function initSection1() {
+  function initMod1() {
     document.getElementById("wx-replay-case1").addEventListener("click", () => {
       animateTyping(document.getElementById("wx-case1-keys"), "ni'ge'c'l'l");
     });
@@ -573,12 +546,11 @@
     const board = document.getElementById("wx-case2-board");
     const cap = document.getElementById("wx-case2-caption");
 
-    function renderStep2(idx, withAnim) {
-      const item = WX_STEPS[idx] || WX_STEPS[0];
-      tabs.forEach((t) => t.classList.toggle("is-active", Number(t.dataset.wxStep) === idx));
+    function renderStep2(step, withAnim) {
+      const item = WX_STEPS[step] || WX_STEPS[0];
+      tabs.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.wxStep) === step));
       if (withAnim) animateTyping(keysEl, item.keys);
       else keysEl.textContent = item.keys;
-
       board.innerHTML = item.cands
         .map(
           (c) =>
@@ -590,17 +562,14 @@
       cap.textContent = item.caption;
     }
 
-    tabs.forEach((btn) =>
-      btn.addEventListener("click", () => renderStep2(Number(btn.dataset.wxStep || 0), true))
-    );
-
+    tabs.forEach((b) => b.addEventListener("click", () => renderStep2(Number(b.dataset.wxStep || 0), true)));
     document.getElementById("wx-morph-btn").addEventListener("click", () => {
       renderStep2(0, false);
-      setTimeout(() => renderStep2(1, true), 520);
+      setTimeout(() => renderStep2(1, true), 480);
     });
   }
 
-  function initSection2() {
+  function initMod2() {
     const strip = document.getElementById("wt-detail-strip");
     const svgWrap = document.getElementById("wt-svg-wrap");
 
@@ -608,9 +577,7 @@
       document.querySelectorAll(".wt-g").forEach((g) => g.classList.toggle("is-active", Number(g.dataset.wt) === idx));
       const items = WT_STAGES[idx] || WT_STAGES[0];
       strip.innerHTML = items
-        .map(
-          (c) => `<div class="wt-card-mini ${c.warn ? "is-warn" : ""}"><b>${escapeHtml(c.title)}</b><p>${escapeHtml(c.body)}</p></div>`
-        )
+        .map((c) => `<div class="wt-card-mini ${c.warn ? "is-warn" : ""}"><b>${escapeHtml(c.title)}</b><p>${escapeHtml(c.body)}</p></div>`)
         .join("");
     }
 
@@ -627,18 +594,16 @@
     selectWt(2);
   }
 
-  function initSection4() {
+  function initMod4() {
     const chips = document.getElementById("rule-chip-group");
     const pre = document.getElementById("rime-yaml-preview");
 
     function renderYaml() {
       const sel = RIME_RULES.filter((r) => state.selectedRules.has(r.id));
-      const lines = sel.length
-        ? sel.map((r) => `    - ${r.line}  # ${r.id}`).join("\n")
-        : "    # 请至少保留一条模糊音规则";
+      const lines = sel.length ? sel.map((r) => `    - ${r.line}  # ${r.id}`).join("\n") : "    # 请至少勾选一条模糊音规则";
       pre.textContent =
         "patch:\n" +
-        "  # BEGIN PERSONAL-IME AUTO RULES\n" +
+        "  # BEGIN PERSONAL-IME AUTO RULES (白名单受控输出)\n" +
         "  speller/algebra/+:\n" +
         lines +
         "\n  # END PERSONAL-IME AUTO RULES";
@@ -661,19 +626,17 @@
 
     document.getElementById("dp-play-btn").addEventListener("click", () => {
       let step = 0;
-      const run = () => {
-        document.querySelectorAll("[data-dp]").forEach((el) => {
-          el.classList.toggle("is-pulse", Number(el.dataset.dp) === step);
-        });
+      const tick = () => {
+        document.querySelectorAll("[data-dp]").forEach((el) => el.classList.toggle("is-pulse", Number(el.dataset.dp) === step));
         step += 1;
-        if (step <= 3) setTimeout(run, 360);
-        else setTimeout(() => document.querySelectorAll("[data-dp]").forEach((el) => el.classList.remove("is-pulse")), 400);
+        if (step <= 3) setTimeout(tick, 340);
+        else setTimeout(() => document.querySelectorAll("[data-dp]").forEach((el) => el.classList.remove("is-pulse")), 420);
       };
-      run();
+      tick();
     });
   }
 
-  function initSection6() {
+  function initMod6() {
     const slider = document.getElementById("hyst-slider");
     const rateVal = document.getElementById("hyst-rate-val");
     const badge = document.getElementById("hyst-state-badge");
@@ -693,11 +656,11 @@
       else if (rate < 5) simulatedOn = false;
 
       let xPos;
-      if (rate <= 5) xPos = 44 + (rate / 5) * 120;
-      else if (rate <= 15) xPos = 164 + ((rate - 5) / 10) * 240;
-      else xPos = 404 + ((rate - 15) / 15) * 330;
+      if (rate <= 5) xPos = 52 + (rate / 5) * 128;
+      else if (rate <= 15) xPos = 180 + ((rate - 5) / 10) * 250;
+      else xPos = 430 + ((rate - 15) / 15) * 350;
 
-      const dotY = simulatedOn ? 94 : 184;
+      const dotY = simulatedOn ? 98 : 194;
       const dotColor = simulatedOn ? "#1D4ED8" : rate < 5 ? "#64748B" : "#D97706";
       cursorGroup.setAttribute("transform", `translate(${xPos.toFixed(1)}, 0)`);
       cursorDot.setAttribute("cy", String(dotY));
@@ -709,7 +672,7 @@
         notifyText.textContent =
           notifyCountdown !== undefined
             ? `[已开启 ong=on] · 轻提示倒计时 ${notifyCountdown}/3`
-            : "写入 algebra 补丁并在首候选轻量提示 3 次即静默";
+            : "写入 algebra 补丁并在首候选轻提示 3 次即静默";
       } else if (rate < 5) {
         badge.textContent = "状态：休眠 OFF (< 5%)";
         badge.className = "ime-cand is-miss";
@@ -718,15 +681,14 @@
         badge.textContent = simulatedOn ? "状态：迟滞维持 ON (5%~15%)" : "状态：迟滞缓冲 OFF (5%~15%)";
         badge.className = "ime-cand";
         notifyText.textContent = simulatedOn
-          ? "虽暂时回落到 5%~15%，因迟滞区间继续维持开启不反复横跳"
-          : "未破 15% 暂不开启，防止偶发误敲污染词库";
+          ? "虽暂时回落到 5%~15%，因迟滞保护继续维持开启不反复横跳"
+          : "未破 15% 暂不开启，避免偶发错敲污染词库";
       }
       presets.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.rate) === rate));
     }
 
     slider.addEventListener("input", () => applyRate(slider.value));
     presets.forEach((b) => b.addEventListener("click", () => applyRate(b.dataset.rate)));
-
     document.getElementById("hyst-autoplay-btn").addEventListener("click", () => {
       if (state.hystAutoTimer) {
         clearInterval(state.hystAutoTimer);
@@ -753,11 +715,10 @@
         applyRate(seq[idx][0], seq[idx][1]);
       }, 650);
     });
-
     applyRate(8);
   }
 
-  function initSection7() {
+  function initMod7() {
     document.getElementById("noise-cascade-btn").addEventListener("click", () => {
       let step = 0;
       const cards = document.querySelectorAll(".nc-step");
@@ -765,7 +726,7 @@
         cards.forEach((c, i) => c.classList.toggle("is-lit", i <= step));
         step += 1;
         if (step >= cards.length) clearInterval(timer);
-      }, 360);
+      }, 340);
     });
 
     const toggleBtn = document.getElementById("bpe-toggle-btn");
@@ -843,10 +804,10 @@
         note.innerHTML = `<div class="ime-cand is-winner">目标键 ${target} -> 物理旁键距离惩罚（复现 paoshibnie 蹭键）</div>`;
       } else if (state.kbMode === "abbr") {
         cap.textContent = "整句首字母简拼采样：wmxqcf -> 我们先去吃饭";
-        note.innerHTML = `<div class="ime-cand is-winner">21 种声韵母缩写率由日志直接统计，无需人工编造</div>`;
+        note.innerHTML = `<div class="ime-cand is-winner">21 种声韵母缩写率由脱敏日志直接估算</div>`;
       } else {
-        cap.textContent = "jieba 词级采样：整词成块丢失韵母";
-        note.innerHTML = `<div class="ime-cand is-winner">词级丢音节，贴合真实连续打字习惯</div>`;
+        cap.textContent = "jieba 词级丢韵母采样";
+        note.innerHTML = `<div class="ime-cand is-winner">以词为单位丢音节，贴合真实连续输入手癖</div>`;
       }
     }
 
@@ -860,7 +821,7 @@
     renderKb();
   }
 
-  function initSection8() {
+  function initMod8() {
     function selectBridge(idx) {
       document.querySelectorAll("#bridge-node-bar .p4-node").forEach((b) => b.classList.toggle("is-active", Number(b.dataset.bridge) === idx));
       const item = BRIDGE_NODES[idx] || BRIDGE_NODES[0];
@@ -872,17 +833,23 @@
         <div class="badge-row">${item.badges.map((b) => `<span class="tag tag-blue">${escapeHtml(b)}</span>`).join("")}</div>
       `;
     }
-    document.querySelectorAll("#bridge-node-bar .p4-node").forEach((b) => b.addEventListener("click", () => selectBridge(Number(b.dataset.bridge))));
+    document.querySelectorAll("#bridge-node-bar .p4-node").forEach((b) =>
+      b.addEventListener("click", () => {
+        revealElement(document.querySelector("#mod-8 [data-step='1']"));
+        selectBridge(Number(b.dataset.bridge));
+      })
+    );
     selectBridge(0);
 
     const svg = document.getElementById("trie-svg");
     const status = document.getElementById("trie-pulse-status");
     document.getElementById("trie-anim-btn").addEventListener("click", () => {
+      revealElement(document.querySelector("#mod-8 [data-step='1']"));
       svg.classList.toggle("is-pulsing");
       const pulsing = svg.classList.contains("is-pulsing");
       status.textContent = pulsing
         ? "剪枝激活：超预算幻觉路径已切断，kuai(+4.2*ep) 直通 DynamicCache"
-        : "合法惩罚保留，超预算路径瞬间剪枝";
+        : "只保留预算内读音，超阈值路径瞬间剪枝";
     });
   }
 
@@ -921,7 +888,7 @@
     renderCase(0);
   }
 
-  function initSection9() {
+  function initMod9() {
     document.getElementById("case-prev-btn").addEventListener("click", () => renderCase(state.caseIdx - 1));
     document.getElementById("case-next-btn").addEventListener("click", () => renderCase(state.caseIdx + 1));
     document.getElementById("reveal-models-btn").addEventListener("click", advanceModelReveal);
@@ -976,7 +943,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Live Right Panel (QR + /api/leaderboard + Reset Modal)
+  // Live Right Panel (QR + /api/leaderboard + Reset)
   // ---------------------------------------------------------------------------
   function initQrAndClipboard() {
     const playUrl = `${window.location.origin}/play`;
@@ -1156,26 +1123,41 @@
   }
 
   function initEvents() {
-    dom.prevBtn.addEventListener("click", () => scrollToSection(state.currentSection - 1));
-    dom.nextBtn.addEventListener("click", () => scrollToSection(state.currentSection + 1));
+    window.addEventListener("resize", rescaleDeckStage);
+
+    dom.prevBtn.addEventListener("click", () => navigateToModule(state.currentMod - 1, { direction: "back" }));
+    dom.nextBtn.addEventListener("click", () => navigateToModule(state.currentMod + 1, { direction: "forward" }));
     dom.revealAllBtn.addEventListener("click", revealAllInCurrent);
     dom.toggleSidebarBtn.addEventListener("click", () => setSidebarVisible(!state.sidebarVisible));
     dom.jumpBackBtn.addEventListener("click", popJumpBack);
+
+    dom.toggleMapBtn.addEventListener("click", () => setMapOverlayVisible(dom.mapOverlay.hidden));
+    dom.closeMapBtn.addEventListener("click", () => setMapOverlayVisible(false));
+    dom.mapOverlay.addEventListener("click", (e) => {
+      if (e.target === dom.mapOverlay) setMapOverlayVisible(false);
+    });
+    dom.topoNodes.forEach((n) =>
+      n.addEventListener("click", () => {
+        const target = Number(n.dataset.topo || 0);
+        setMapOverlayVisible(false);
+        navigateToModule(target, {
+          recordJump: target !== state.currentMod,
+          returnNote: `返回：${dom.modules[state.currentMod].dataset.title}`,
+        });
+      })
+    );
 
     dom.fullscreenBtn.addEventListener("click", () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
       else document.exitFullscreen().catch(() => {});
     });
 
-    dom.spineDots.forEach((dot) =>
-      dot.addEventListener("click", () => scrollToSection(Number(dot.dataset.section || 0)))
-    );
-
     document.querySelectorAll("[data-jump]").forEach((btn) =>
       btn.addEventListener("click", () => {
-        scrollToSection(Number(btn.dataset.jump || 0), {
+        navigateToModule(Number(btn.dataset.jump || 0), {
+          direction: "forward",
           recordJump: true,
-          returnNote: btn.dataset.jumpNote || "",
+          returnNote: btn.dataset.jumpNote || `返回：${dom.modules[state.currentMod].dataset.title}`,
         });
       })
     );
@@ -1191,6 +1173,13 @@
         if (e.key === "Escape") dom.resetModal.hidden = true;
         return;
       }
+      if (!dom.mapOverlay.hidden) {
+        if (e.key === "Escape" || e.key === "m" || e.key === "M") {
+          e.preventDefault();
+          setMapOverlayVisible(false);
+        }
+        return;
+      }
       if (["INPUT", "TEXTAREA"].includes(document.activeElement && document.activeElement.tagName)) return;
 
       if (e.key === "Escape" || e.key === "Backspace") {
@@ -1199,15 +1188,18 @@
           return;
         }
       }
-      if (e.key === "ArrowRight" || e.key === "PageDown") {
+      if (e.key === "m" || e.key === "M") {
         e.preventDefault();
-        scrollToSection(state.currentSection + 1);
+        setMapOverlayVisible(true);
+      } else if (e.key === "ArrowRight" || e.key === "PageDown") {
+        e.preventDefault();
+        navigateToModule(state.currentMod + 1, { direction: "forward" });
       } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
-        scrollToSection(state.currentSection - 1);
+        navigateToModule(state.currentMod - 1, { direction: "back" });
       } else if (e.key === " ") {
         e.preventDefault();
-        if (!revealNextInCurrent()) scrollToSection(state.currentSection + 1);
+        if (!revealNextInCurrent()) navigateToModule(state.currentMod + 1, { direction: "forward" });
       } else if (e.key === "b" || e.key === "B") {
         setSidebarVisible(!state.sidebarVisible);
       } else if (e.key === "f" || e.key === "F") {
@@ -1217,19 +1209,20 @@
   }
 
   // Boot
-  initSection1();
-  initSection2();
-  initSection4();
-  initSection6();
-  initSection7();
-  initSection8();
-  initSection9();
+  initMod1();
+  initMod2();
+  initMod4();
+  initMod6();
+  initMod7();
+  initMod8();
+  initMod9();
   initQrAndClipboard();
   initResetModal();
   initEvents();
-  initScrollObserver();
 
-  updateActiveSectionUI(0);
+  dom.topoNodes.forEach((n) => n.classList.toggle("is-current", Number(n.dataset.topo) === 0));
+  updateRevealButtonLabel();
+  rescaleDeckStage();
   pollLeaderboard();
   state.pollTimer = setInterval(pollLeaderboard, POLL_INTERVAL_MS);
 })();

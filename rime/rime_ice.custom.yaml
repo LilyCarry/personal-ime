@@ -1,0 +1,13 @@
+patch:
+  # 挂载输入日志采集处理器 + 最近 800 字热词队列处理器（均仅观察，不拦截按键）
+  "engine/processors/@before 0": lua_processor@*ime_logger
+  "engine/processors/@after 0": lua_processor@*recent_proc
+  # 挂载最近 800 字记忆召回滤镜（<0.2ms 纯本地，位于去重前）
+  "engine/filters/@before last": lua_filter@*recent_filter
+  # 防止偶发 userdb 调频抢占高频基础单字
+  "pin_cand_filter/+":
+    - "zai	在 再"
+    - "shi	是 时"
+    - "you	有 又"
+  # 硬件标签：换新键盘后改成 new_kb 并重新部署，即可与旧键盘连击样本隔离
+  "ime_logger/hw_tag": "old_kb"

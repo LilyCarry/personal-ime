@@ -11,3 +11,9 @@ patch:
     - "you	有 又"
   # 硬件标签：换新键盘后改成 new_kb 并重新部署，即可与旧键盘连击样本隔离
   "ime_logger/hw_tag": "old_kb"
+  # 规则自动切换轻量提醒滤镜（Issue #6）：取消下方注释并重新部署后，
+  # 当 profiler/rule_updater.py 生成 user_data_dir/rule_notify.txt 时会在候选注释短暂提示
+  # "engine/filters/@after last": lua_filter@*rule_notify
+  # 自适应拼音规则补丁示例（可由 profiler.rule_updater 自动导出并合并到此处）：
+  # "speller/algebra/+":
+  #   - 'derive/ong$/on/'

@@ -21,7 +21,7 @@ from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.cache_utils import DynamicCache
 
-ROOT = Path(r"C:\Users\xu762\Documents\Github\personal-ime")
+ROOT = Path(__file__).resolve().parent.parent
 MODEL_DIR = Path(r"C:\Users\xu762\.cache\modelscope\hub\models\Qwen\Qwen3-0___6B-Base")
 LORA_DIR = ROOT / "checkpoints" / "qwen3_06b_lora" / "final"
 DICT_PATH = Path(r"C:\Users\xu762\AppData\Roaming\Rime\cn_dicts\8105.dict.yaml")

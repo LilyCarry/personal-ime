@@ -1,9 +1,14 @@
 import json
+import sys
 import time
 from pathlib import Path
 import torch
 
-from train_mobile_small import TinyIMEModel, CharTokenizer, evaluate, CKPT_DIR, VAL_PATH, REAL_PATH
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from model.train_mobile_small import TinyIMEModel, CharTokenizer, evaluate, CKPT_DIR, VAL_PATH, REAL_PATH
 
 vocab = json.loads((CKPT_DIR / "vocab.json").read_text(encoding="utf-8"))
 tok = CharTokenizer(vocab)

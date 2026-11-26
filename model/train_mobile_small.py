@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
-ROOT = Path(r"C:\Users\xu762\Documents\Github\personal-ime")
+ROOT = Path(__file__).resolve().parent.parent
 TRAIN_PATH = ROOT / "data" / "processed" / "train.jsonl"
 VAL_PATH = ROOT / "data" / "processed" / "val.jsonl"
 REAL_PATH = ROOT / "data" / "processed" / "real_eval.json"

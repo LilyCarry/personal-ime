@@ -10,12 +10,15 @@ import json
 import multiprocessing as mp
 import random
 import re
+import sys
 import time
 from pathlib import Path
 
-from noise_simulator import PROFILES, corrupt_text
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-ROOT = Path(r"C:\Users\xu762\Documents\Github\personal-ime")
+from profiler.noise_simulator import PROFILES, corrupt_text
 TRAIN_SRC = ROOT / "data" / "raw" / "lccc_train_slice.jsonl"
 TEST_SRC = ROOT / "data" / "raw" / "lccc_base_test.jsonl.gz"
 OUT_DIR = ROOT / "data" / "processed"

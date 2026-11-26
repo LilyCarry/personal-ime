@@ -17,7 +17,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig, get_peft_model
 
-ROOT = Path(r"C:\Users\xu762\Documents\Github\personal-ime")
+ROOT = Path(__file__).resolve().parent.parent
 MODEL_DIR = Path(r"C:\Users\xu762\.cache\modelscope\hub\models\Qwen\Qwen3-0___6B-Base")
 TRAIN_PATH = ROOT / "data" / "processed" / "train.jsonl"
 VAL_PATH = ROOT / "data" / "processed" / "val.jsonl"

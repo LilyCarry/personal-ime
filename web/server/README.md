@@ -18,6 +18,10 @@
 | `ADMIN_TOKEN` | `POST /api/reset` 清榜口令（必填，未配置时接口返回 503） | 无 |
 | `LEADERBOARD_DB_PATH` | SQLite 数据库文件路径 | `web/server/leaderboard.db` |
 | `CORS_ORIGINS` | 允许跨域的 Origin 列表，多个以英文逗号分隔 | `*` |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（未配置时自动降级本地规则推荐） | 无 |
+| `DEEPSEEK_BASE_URL` | DeepSeek API 基础地址 | `https://api.deepseek.com` |
+| `DEEPSEEK_MODEL` | DeepSeek 模型名称 | `deepseek-chat` |
+| `DEEPSEEK_TIMEOUT_SEC` | DeepSeek 请求超时秒数（触发超时自动降级） | `6.0` |
 
 ## 启动方式
 
@@ -88,7 +92,48 @@ uvicorn web.server.app:app --host 0.0.0.0 --port 8000 --workers 1
 }
 ```
 
-### 3. 清空排行榜
+### 3. 提交竞速分析与规则推荐
+
+- `POST /api/analyze`
+- 请求体 JSON：
+  - `nickname`（必填）：参赛昵称
+  - `target_text`（必填）：目标短文
+  - `typed_input`（必填）：用户原始拼音敲击序列
+  - `duration_sec`（必填，> 0）：耗时秒数
+  - `target_pinyin`（可选，默认 `""`）：目标参考拼音
+  - `backspaces`（可选，默认 `0`）：退格次数
+  - `cpm`、`accuracy`、`score`（可选）：前端已计算时直接采用（自动做范围裁剪），未传则由后端自动计算
+- 响应 `200 OK`（无论 DeepSeek 成功或本地降级，均会写入排行榜并返回）：
+
+```json
+{
+  "record": {
+    "id": 1,
+    "nickname": "Carry",
+    "cpm": 185.0,
+    "accuracy": 96.5,
+    "score": 178.5,
+    "title": "后鼻音省电派",
+    "comment": "...",
+    "rules": ["ong=on", "in=ing"],
+    "created_at": "2026-11-26T12:00:00Z",
+    "rank": 1
+  },
+  "rank": 1,
+  "rime_yaml": "patch:\n  speller/algebra/+:\n    ...",
+  "rule_reasons": {
+    "ong=on": "检测到后鼻音省尾倾向"
+  },
+  "fallback": false
+}
+```
+
+### 4. 获取标准规则词表
+
+- `GET /api/rules/catalog`
+- 直接返回 `profiler.rules_schema.export_catalog()` 列表，供前端开关面板渲染。
+
+### 5. 清空排行榜
 
 - `POST /api/reset`
 - 请求头：`X-Admin-Token: <ADMIN_TOKEN>`

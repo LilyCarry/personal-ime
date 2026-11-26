@@ -2,8 +2,7 @@
   "use strict";
 
   /**
-   * 最小纯原生 QR 编码器（Byte 模式 + ECC Level M，支持 Version 1..8，最大 152 字节），
-   * 用于离线/内网大屏零依赖动态生成 /play 二维码。
+   * 纯原生 QR 编码器（Byte 模式 + ECC Level M，支持 Version 1..8）。
    */
   const QREncoder = (() => {
     const GF_EXP = new Uint8Array(512);
@@ -90,8 +89,7 @@
       const bytes = new TextEncoder().encode(text);
       let spec = null;
       for (let v = 1; v < VERSIONS_M.length; v += 1) {
-        const cap = VERSIONS_M[v].dataCw - 2;
-        if (bytes.length <= cap) {
+        if (bytes.length <= VERSIONS_M[v].dataCw - 2) {
           spec = VERSIONS_M[v];
           break;
         }
@@ -267,9 +265,7 @@
               run += 1;
               if (run === 5) score += 3;
               else if (run > 5) score += 1;
-            } else {
-              run = 1;
-            }
+            } else run = 1;
           }
         }
         for (let c = 0; c < size; c += 1) {
@@ -279,9 +275,7 @@
               run += 1;
               if (run === 5) score += 3;
               else if (run > 5) score += 1;
-            } else {
-              run = 1;
-            }
+            } else run = 1;
           }
         }
         for (let r = 0; r < size - 1; r += 1) {
@@ -347,40 +341,119 @@
     return { createSvg };
   })();
 
+  const WX_STEP_DATA = [
+    {
+      badge: "第 1 次打自造句「签到了快起床」（效果不如意）",
+      keys: "qian'd'l'kuai'q'c",
+      cands: ["1 钱多了快去吃", "2 钱到了快去吃", "3 前端", "4 签到"],
+      top1Miss: true,
+      note: "即使敲出了完整音节 kuai，通用统计依然优先把「钱多了快去吃」放在第一位。",
+    },
+    {
+      badge: "手动纠正一次后，第 2 次打甚至省掉 kuai -> k",
+      keys: "qian'd'l'k'q'c",
+      cands: ["1 签到了快起床", "2 签订了看清楚", "3 签到了", "4 前端"],
+      top1Miss: false,
+      note: "第二次打即使把 kuai 省略成单字母 k，输入法依然能顺着上下文记忆直接吐出「签到了快起床」。",
+    },
+  ];
+
+  const WETYPE_STAGES = [
+    {
+      title: "STEP 01 · 残缺 / 吞键按键流与 2D 物理坐标采集",
+      desc: "输入流往往存在吞键、平翘舌混淆或高速换序，系统同时记录每个键的 2D QWERTY 坐标偏移与按键间隔。",
+      cards: [
+        { cls: "", head: "xiag", body: "吞键漏打：高速连打漏掉后鼻音 n" },
+        { cls: "", head: "senm / qian'd'l'k'q'c", body: "平翘舌混淆 / 尾音截断与重度简拼" },
+        { cls: "", head: "niaho", body: "高速连打：左右手相邻键时序换序" },
+      ],
+    },
+    {
+      title: "STEP 02 · 模糊拼音格（Fuzzy Lattice）联合容错搜索",
+      desc: "不做死板的硬音节切分，而是边扫按键边在 WFST / 容错 Trie 上并行展开多个候选路径。",
+      cards: [
+        { cls: "is-good", head: "路径 A：xiag -> xiang", body: "补 n · 对应 想 / 项 / 像（上下文强匹配，保留）" },
+        { cls: "is-bad", head: "路径 B：xiag -> xia + g", body: "强行割裂：下个 / 夏哥（语义极低，被 Beam Search 剪枝）" },
+        { cls: "", head: "路径 C：邻键 g -> f / h", body: "2D 键距加权替换，在容错 Trie 上保留 Top-K 路径" },
+      ],
+    },
+    {
+      title: "STEP 03 · 多级语言模型打分与「空间换时间」重排",
+      desc: "用三级流水线平衡响应速度与长句命中率——这也正是商业输入法内存重、难定制、有联网顾虑的根源。",
+      cards: [
+        { cls: "", head: "L1 本地极速词典 (< 5ms)", body: "庞大静态通用词库 + 热词缓存，靠「空间换时间」命中约 80% 常规输入" },
+        { cls: "", head: "L2 端侧轻量神经模型 (10~30ms)", body: "几十 MB 量化 RNN / Transformer，结合上下文做 Top-K 重排" },
+        { cls: "is-warn", head: "L3 云端大模型补强 (异步联网)", body: "重度错拼或长句简拼时，异步上传上下文至云端拉取联想候选" },
+      ],
+    },
+    {
+      title: "STEP 04 · 候选重排输出与三大局限反思",
+      desc: "只要语言模型概率足够高，就能抵消拼写惩罚把「想吃什么」顶到第一；但对个人来说依然存在三大局限：",
+      cards: [
+        { cls: "is-bad", head: "1. 隐私高度敏感", body: "L3 云端上下文联想与遥测存在数据出境与泄露顾虑" },
+        { cls: "is-warn", head: "2. 呆板空间换时间", body: "庞大静态通用词库面向平均人，无法按个人习惯精细裁剪" },
+        { cls: "", head: "3. 深度定制化低", body: "无法显式查看个人声韵母分布，也不能用专属语料本地训练小模型" },
+      ],
+    },
+  ];
+
+  const BRIDGE_NODES = [
+    {
+      title: "NODE 01 · 小狼毫 Lua 拦截器（rime/lua/ai_filter.lua）",
+      desc: "平时打字 0ms 零阻塞，完全由雾凇拼音原生出词；只有当你在输入末尾刻意敲入单引号 '（例如 yixa' / wmxqcf'）时，才截取最近 28 字上文触发本地 AI。",
+      tags: ["平时 0ms 零延迟", "单引号 ' 按需触发", "60s 跨场景自动清空上文"],
+    },
+    {
+      title: "NODE 02 · C 桥接动态库（rime/bridge/ime_bridge.c）",
+      desc: "Lua 原生不支持无黑框 TCP；我们用 Winsock2 手写极简 C DLL，设置非阻塞 15ms 连接超时与 TCP_NODELAY，直接与 127.0.0.1:18765 亚毫秒通信。",
+      tags: ["gcc -shared 编译", "15ms 非阻塞超时", "TCP_NODELAY 零黑框"],
+    },
+    {
+      title: "NODE 03 · 拼音 Trie 容错 Beam Search（model/ime_server.py）",
+      desc: "用 8105 通用字表读音将 Qwen3 词表建为拼音 Trie，并预生成变体惩罚：精确 0.0 / 前缀缩写 0.9 / 换序 2.8 / 缺介母 3.0 / 邻键或蹭键 3.2。配合 DynamicCache 复用前缀 KV。",
+      tags: ["8105 汉字读音 Trie", "单步代价 <= 4.5", "整句惩罚 <= 7.0"],
+    },
+    {
+      title: "NODE 04 · 候选置顶与零副作用兜底",
+      desc: "AI 返回的 Top-1 / Top-2 带 [AI] 标注置顶，同时保留雾凇原生候选并自动去重；若本地 GPU 推理服务未启动，0.1ms 直接静默透传原生候选。",
+      tags: ["[AI] Top-1/2 置顶", "去重保留雾凇候选", "服务未启 0.1ms 回落"],
+    },
+  ];
+
   const RULE_COMPILER_DEMOS = [
     {
       id: "ong=on",
-      alias: "on=ong / ong->on -> ong=on",
-      example: "wuson -> 雾凇 (wusong)",
+      alias: "on=ong -> ong=on",
+      example: "wuson -> 雾凇",
       desc: "允许将后鼻音 ong 简写为 on，贴合快速敲击时省去末尾 g 的高频习惯，不影响原本 on 词条。",
       algebra: ["derive/ong$/on/"],
     },
     {
       id: "l=r",
-      alias: "r=l / l<->r -> l=r",
+      alias: "r=l -> l=r",
       example: "len -> ren (认真)",
       desc: "声母 l 与 r 双向模糊派生，适配部分方言混用或高速盲打时的声母漂移。",
       algebra: ["derive/^l/r/", "derive/^r/l/"],
     },
     {
       id: "z=zh",
-      alias: "zh=z / zh/z -> z=zh",
-      example: "zao -> zhao / zhi -> zi",
+      alias: "zh=z -> z=zh",
+      example: "zao -> zhao",
       desc: "平翘舌声母双向互通；类似地 c=ch、s=sh 采用负向先行断言 ([^h]) 避免二次重复匹配。",
       algebra: ["derive/^zh/z/", "derive/^z([^h])/zh$1/"],
     },
     {
       id: "ju=jv",
-      alias: "u=v / jv=ju -> ju=jv",
-      example: "qv -> qu / xve -> xue",
+      alias: "u=v -> ju=jv",
+      example: "qv -> qu",
       desc: "兼容部分双拼/习惯把 j/q/x/y 后的 u 敲作 v 的拼写差异。",
       algebra: ["derive/^([jqxy])u/$1v/", "derive/^([jqxy])v/$1u/"],
     },
     {
       id: "zh=hz",
       alias: "hz=zh -> zh=hz",
-      example: "hzi -> zhi / zih -> zhi",
-      desc: "纠正高速敲击时声母 zh/ch/sh 与紧随元音间的左右手时序倒置（如 changhs -> changsh）。",
+      example: "hzi -> zhi",
+      desc: "纠正高速敲击时声母 zh/ch/sh 与紧随元音间的左右手时序倒置。",
       algebra: [
         "derive/([zcs])h(a|e|i|u|ai|ei|an|en|ou|uo|ua|un|ui|uan|uai|uang|ang|eng|ong)$/h$1$2/",
         "derive/([zcs])h([aeiu])$/$1$2h/",
@@ -389,7 +462,7 @@
     {
       id: "an=na",
       alias: "na=an -> an=na",
-      example: "dna -> dan / bna -> ban",
+      example: "dna -> dan",
       desc: "针对连打时末尾 an 误抢按成 na 的邻键时序换序，限定声母前置避免误伤正常 na 音节。",
       algebra: ["derive/([wrtypsdfghklzcbnm])an$/$1na/"],
     },
@@ -410,7 +483,7 @@
       steps: [
         "目标汉字: 跑 识别",
         "标准拼音: pao | shi bie",
-        "物理蹭键: e 在 QWERTY 附近或连打带入 n -> bie + n = bnie",
+        "物理蹭键: 连打带入邻键 n -> bie + n = bnie",
         "最终输入: <p a o s h i b n i e>  (real_eval win_seq9)",
       ],
     },
@@ -502,47 +575,54 @@
   ];
 
   const TOTAL_SLIDES = 9;
-  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页「现场互动」默认自动展开右侧榜单
+  const INTERACTIVE_SLIDE_INDEX = 4; // 第 5 页「现场互动」自动展开右侧榜单
   const POLL_INTERVAL_MS = 2000;
   const WALL_ROTATE_MS = 4500;
 
   const state = {
     currentSlide: 0,
-    sidebarVisible: false, // 一开始不出现右侧榜单
+    sidebarVisible: false,
     sidebarManualOverride: false,
     totalCount: 0,
     leaderboard: [],
     recentComments: [],
     spotlightIndex: 0,
     wallPaused: false,
+    wxStepIdx: 0,
+    wtStageIdx: 0,
+    bridgeStageIdx: 0,
+    bpeShowGood: false,
     activeRuleDemoIdx: 0,
     activeSimDemoIdx: 0,
     compareCases: BUILTIN_COMPARE_CASES,
     compareSourceLabel: "内置实证案例 (8 组)",
     currentCaseIndex: 0,
+    revealStep: 3, // 3 = show all, 1 = base only, 2 = base + A
   };
 
   const el = {
     stageShell: document.getElementById("stage-shell"),
     stageRight: document.getElementById("stage-right"),
+    hudChapterName: document.getElementById("hud-chapter-name"),
     toggleSidebarBtn: document.getElementById("toggle-sidebar-btn"),
     slideCards: Array.from(document.querySelectorAll(".slide-card")),
-    slideTabs: Array.from(document.querySelectorAll(".slide-tab")),
     slideCounter: document.getElementById("slide-counter"),
     slideDots: document.getElementById("slide-dots"),
     prevSlideBtn: document.getElementById("prev-slide-btn"),
     nextSlideBtn: document.getElementById("next-slide-btn"),
     fullscreenBtn: document.getElementById("fullscreen-btn"),
 
-    // Slide 5 (live interaction wall)
-    wallTotalCount: document.getElementById("wall-total-count"),
-    wallToggleBtn: document.getElementById("wall-toggle-btn"),
-    wallNextBtn: document.getElementById("wall-next-btn"),
-    wallCarouselIndex: document.getElementById("wall-carousel-index"),
-    spotlightBox: document.getElementById("spotlight-box"),
-    recentFeedList: document.getElementById("recent-feed-list"),
+    // Slide 1 interactive WeChat demos
+    wxDemo1Keys: document.getElementById("wx-demo1-keys"),
+    replayWx1Btn: document.getElementById("replay-wx1-btn"),
+    wxStepTabs: Array.from(document.querySelectorAll(".wx-step-tab")),
+    wxStepDisplay: document.getElementById("wx-step-display"),
 
-    // Slide 4 interactive compiler
+    // Slide 2 WeType interactive pipeline
+    wtNodes: Array.from(document.querySelectorAll("#wt-stage-bar .wt-node")),
+    wtDetailStage: document.getElementById("wt-detail-stage"),
+
+    // Slide 4 compiler
     ruleDemoTabs: document.getElementById("rule-demo-tabs"),
     compilerRuleId: document.getElementById("compiler-rule-id"),
     compilerAlias: document.getElementById("compiler-alias"),
@@ -550,19 +630,48 @@
     compilerDesc: document.getElementById("compiler-desc"),
     compilerYaml: document.getElementById("compiler-yaml"),
 
-    // Slide 7 interactive noise simulator
+    // Slide 5 interaction wall
+    wallTotalCount: document.getElementById("wall-total-count"),
+    wallToggleBtn: document.getElementById("wall-toggle-btn"),
+    wallNextBtn: document.getElementById("wall-next-btn"),
+    wallCarouselIndex: document.getElementById("wall-carousel-index"),
+    spotlightBox: document.getElementById("spotlight-box"),
+    recentFeedList: document.getElementById("recent-feed-list"),
+
+    // Slide 6 hysteresis simulator
+    hystSlider: document.getElementById("hyst-slider"),
+    hystRateVal: document.getElementById("hyst-rate-val"),
+    hystStateBadge: document.getElementById("hyst-state-badge"),
+    hystSimOutput: document.getElementById("hyst-sim-output"),
+    hystPresetBtns: Array.from(document.querySelectorAll("[data-rate]")),
+    svgNodeOff: document.getElementById("svg-node-off"),
+    svgNodeMid: document.getElementById("svg-node-mid"),
+    svgNodeOn: document.getElementById("svg-node-on"),
+
+    // Slide 7 noise sim & BPE toggle
     simTabs: document.getElementById("sim-tabs"),
     simPipelineView: document.getElementById("sim-pipeline-view"),
+    bpeToggleBtn: document.getElementById("bpe-toggle-btn"),
+    bpeModeBad: document.getElementById("bpe-mode-bad"),
+    bpeModeGood: document.getElementById("bpe-mode-good"),
+
+    // Slide 8 bridge explorer
+    bridgeNodes: Array.from(document.querySelectorAll("#bridge-node-bar .wt-node")),
+    bridgeDetailBox: document.getElementById("bridge-detail-box"),
 
     // Slide 9 compare cases
     casesSourceBadge: document.getElementById("cases-source-badge"),
     casesFileInput: document.getElementById("cases-file-input"),
+    revealModelsBtn: document.getElementById("reveal-models-btn"),
     caseSelector: document.getElementById("case-selector"),
     caseContext: document.getElementById("case-context"),
     caseRawKeys: document.getElementById("case-raw-keys"),
     caseBasePred: document.getElementById("case-base-pred"),
     caseUserAPred: document.getElementById("case-user-a-pred"),
     caseUserBPred: document.getElementById("case-user-b-pred"),
+    colBase: document.getElementById("col-base"),
+    colUserA: document.getElementById("col-user-a"),
+    colUserB: document.getElementById("col-user-b"),
     caseNote: document.getElementById("case-note"),
     prevCaseBtn: document.getElementById("prev-case-btn"),
     nextCaseBtn: document.getElementById("next-case-btn"),
@@ -629,7 +738,7 @@
     });
   }
 
-  // ---- Navigation ----
+  // ---- Navigation with directional motion ----
   function renderSlideDots() {
     el.slideDots.innerHTML = "";
     for (let i = 0; i < TOTAL_SLIDES; i += 1) {
@@ -644,15 +753,23 @@
 
   function goToSlide(index) {
     const target = Math.max(0, Math.min(TOTAL_SLIDES - 1, index));
+    const forward = target >= state.currentSlide;
     state.currentSlide = target;
+
     el.slideCards.forEach((card, idx) => {
       const active = idx === target;
       card.hidden = !active;
-      card.classList.toggle("is-active", active);
+      card.classList.remove("is-active", "anim-forward", "anim-back");
+      if (active) {
+        card.classList.add("is-active", forward ? "anim-forward" : "anim-back");
+      }
     });
-    el.slideTabs.forEach((tab, idx) => {
-      tab.classList.toggle("is-active", idx === target);
-    });
+
+    const activeCard = el.slideCards[target];
+    if (activeCard && el.hudChapterName) {
+      el.hudChapterName.textContent = activeCard.dataset.chapter || "";
+    }
+
     el.slideCounter.textContent = `${target + 1} / ${TOTAL_SLIDES}`;
     el.prevSlideBtn.disabled = target === 0;
     el.nextSlideBtn.disabled = target === TOTAL_SLIDES - 1;
@@ -661,6 +778,150 @@
     if (!state.sidebarManualOverride && target === INTERACTIVE_SLIDE_INDEX && !state.sidebarVisible) {
       setSidebarVisible(true);
     }
+  }
+
+  // ---- Interactive Expandable Accordions ----
+  function bindExpandables() {
+    document.querySelectorAll("[data-expandable]").forEach((block) => {
+      const trigger = block.querySelector(".block-trigger");
+      if (!trigger) return;
+      trigger.addEventListener("click", () => {
+        const isOpen = block.classList.contains("is-open");
+        // 如果是手风琴组，展开当前项时收起同组兄弟项，保持版面干净无溢出
+        const parentStack = block.parentElement;
+        if (parentStack && parentStack.classList.contains("accordion-stack") && !isOpen) {
+          parentStack.querySelectorAll("[data-expandable].is-open").forEach((sib) => {
+            if (sib !== block) {
+              sib.classList.remove("is-open");
+              const sibTrigger = sib.querySelector(".block-trigger");
+              if (sibTrigger) sibTrigger.setAttribute("aria-expanded", "false");
+            }
+          });
+        }
+        if (parentStack && parentStack.classList.contains("highlights-flow") && !isOpen) {
+          parentStack.querySelectorAll("[data-expandable].is-open").forEach((sib) => {
+            if (sib !== block) {
+              sib.classList.remove("is-open");
+              const sibTrigger = sib.querySelector(".block-trigger");
+              if (sibTrigger) sibTrigger.setAttribute("aria-expanded", "false");
+            }
+          });
+        }
+        block.classList.toggle("is-open", !isOpen);
+        trigger.setAttribute("aria-expanded", String(!isOpen));
+      });
+    });
+  }
+
+  // ---- Slide 1: WeChat progressive demo & typing replay ----
+  function renderWxStep() {
+    const data = WX_STEP_DATA[state.wxStepIdx];
+    el.wxStepTabs.forEach((btn, idx) => {
+      btn.classList.toggle("is-active", idx === state.wxStepIdx);
+    });
+    el.wxStepDisplay.innerHTML = "";
+
+    const badge = document.createElement("div");
+    badge.className = "micro-note";
+    badge.textContent = data.badge;
+
+    const inputLine = document.createElement("div");
+    inputLine.className = "wx-input-row";
+    const keysEl = document.createElement("code");
+    keysEl.className = "mono wx-keys";
+    keysEl.textContent = data.keys;
+    inputLine.appendChild(keysEl);
+
+    const bar = document.createElement("div");
+    bar.className = "wx-bar";
+    data.cands.forEach((text, i) => {
+      const span = document.createElement("span");
+      span.className = `wx-cand${i === 0 ? (data.top1Miss ? " is-miss" : " is-top1") : ""}`;
+      span.textContent = text;
+      bar.appendChild(span);
+    });
+
+    const note = document.createElement("p");
+    note.className = "micro-note";
+    note.textContent = data.note;
+
+    el.wxStepDisplay.append(badge, inputLine, bar, note);
+  }
+
+  let replayTimer = null;
+  function replayWxKeystrokes() {
+    if (replayTimer) window.clearInterval(replayTimer);
+    const full = "ni'ge'c'l'l";
+    let idx = 1;
+    el.wxDemo1Keys.textContent = full.slice(0, idx);
+    replayTimer = window.setInterval(() => {
+      idx += 1;
+      el.wxDemo1Keys.textContent = full.slice(0, idx);
+      if (idx >= full.length) {
+        window.clearInterval(replayTimer);
+        replayTimer = null;
+      }
+    }, 95);
+  }
+
+  // ---- Slide 2: WeType interactive stage explorer ----
+  function renderWtStage() {
+    el.wtNodes.forEach((node, idx) => {
+      node.classList.toggle("is-active", idx === state.wtStageIdx);
+    });
+    const cur = WETYPE_STAGES[state.wtStageIdx];
+    el.wtDetailStage.innerHTML = "";
+
+    const title = document.createElement("h3");
+    title.style.margin = "0 0 4px";
+    title.textContent = cur.title;
+
+    const desc = document.createElement("p");
+    desc.className = "body-copy";
+    desc.textContent = cur.desc;
+
+    const grid = document.createElement("div");
+    grid.className = "wt-detail-grid";
+    cur.cards.forEach((c) => {
+      const card = document.createElement("div");
+      card.className = `wt-mini-card${c.cls ? ` ${c.cls}` : ""}`;
+      const strong = document.createElement("strong");
+      strong.textContent = c.head;
+      const p = document.createElement("p");
+      p.textContent = c.body;
+      card.append(strong, p);
+      grid.appendChild(card);
+    });
+
+    el.wtDetailStage.append(title, desc, grid);
+  }
+
+  // ---- Slide 4: Interactive Rule Compiler ----
+  function renderRuleCompilerDemo() {
+    el.ruleDemoTabs.innerHTML = "";
+    RULE_COMPILER_DEMOS.forEach((item, idx) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `rule-demo-btn${idx === state.activeRuleDemoIdx ? " is-active" : ""}`;
+      btn.textContent = item.id;
+      btn.addEventListener("click", () => {
+        state.activeRuleDemoIdx = idx;
+        renderRuleCompilerDemo();
+      });
+      el.ruleDemoTabs.appendChild(btn);
+    });
+
+    const cur = RULE_COMPILER_DEMOS[state.activeRuleDemoIdx];
+    el.compilerRuleId.textContent = cur.id;
+    el.compilerAlias.textContent = cur.alias;
+    el.compilerExample.textContent = cur.example;
+    el.compilerDesc.textContent = cur.desc;
+    el.compilerYaml.textContent = [
+      "patch:",
+      "  speller/algebra/+:",
+      `    # [${cur.id}]`,
+      ...cur.algebra.map((expr) => `    - '${expr}'`),
+    ].join("\n");
   }
 
   // ---- Slide 5: Interaction Wall ----
@@ -676,7 +937,7 @@
       const strong = document.createElement("strong");
       strong.textContent = "等待第一位同学扫码完赛...";
       const p = document.createElement("p");
-      p.textContent = "请使用手机扫描右侧二维码进入 /play，敲完 3 句拼音即可在大屏实时上墙并生成专属 Rime 配置。";
+      p.textContent = "请扫描右侧二维码进入 /play，敲完 3 句拼音即可在大屏实时上墙并生成专属 Rime 配置。";
       empty.append(strong, p);
       el.spotlightBox.appendChild(empty);
 
@@ -769,36 +1030,35 @@
     });
   }
 
-  // ---- Slide 4: Interactive Rule Compiler ----
-  function renderRuleCompilerDemo() {
-    el.ruleDemoTabs.innerHTML = "";
-    RULE_COMPILER_DEMOS.forEach((item, idx) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `rule-demo-btn${idx === state.activeRuleDemoIdx ? " is-active" : ""}`;
-      btn.textContent = item.id;
-      btn.addEventListener("click", () => {
-        state.activeRuleDemoIdx = idx;
-        renderRuleCompilerDemo();
-      });
-      el.ruleDemoTabs.appendChild(btn);
-    });
+  // ---- Slide 6: Interactive Hysteresis Simulator ----
+  function updateHystSimulation(rateVal) {
+    const rate = Number(rateVal);
+    el.hystRateVal.textContent = `${rate}%`;
+    el.hystSlider.value = String(rate);
 
-    const cur = RULE_COMPILER_DEMOS[state.activeRuleDemoIdx];
-    el.compilerRuleId.textContent = cur.id;
-    el.compilerAlias.textContent = cur.alias;
-    el.compilerExample.textContent = cur.example;
-    el.compilerDesc.textContent = cur.desc;
-    const yamlLines = [
-      "patch:",
-      "  speller/algebra/+:",
-      `    # [${cur.id}]`,
-      ...cur.algebra.map((expr) => `    - '${expr}'`),
-    ];
-    el.compilerYaml.textContent = yamlLines.join("\n");
+    el.svgNodeOff.setAttribute("stroke-width", "1.5");
+    el.svgNodeMid.setAttribute("stroke-width", "1.5");
+    el.svgNodeOn.setAttribute("stroke-width", "1.5");
+
+    if (rate >= 15) {
+      el.svgNodeOn.setAttribute("stroke-width", "4");
+      el.hystStateBadge.textContent = "状态：触发开启 (>=15%)";
+      el.hystStateBadge.className = "tag-pill is-blue";
+      el.hystSimOutput.textContent = "rule_notify.lua 首候选轻提示：[已为你自动开启 ong=on]（剩余 3 次即静默）";
+    } else if (rate < 5) {
+      el.svgNodeOff.setAttribute("stroke-width", "4");
+      el.hystStateBadge.textContent = "状态：自动降权关闭 (<5%)";
+      el.hystStateBadge.className = "tag-pill is-red";
+      el.hystSimOutput.textContent = "rule_updater.py：命中率过低，从受控补丁区移除 ong=on，避免词库污染";
+    } else {
+      el.svgNodeMid.setAttribute("stroke-width", "4");
+      el.hystStateBadge.textContent = "状态：迟滞缓冲带 (5%~15%)";
+      el.hystStateBadge.className = "tag-pill";
+      el.hystSimOutput.textContent = "Rime 候选注释预览：处于迟滞缓冲带，维持原启用/休眠状态，零反复横跳";
+    }
   }
 
-  // ---- Slide 7: Interactive Noise Simulator ----
+  // ---- Slide 7: Noise Simulator & BPE Toggle ----
   function renderNoiseSimDemo() {
     el.simTabs.innerHTML = "";
     NOISE_SIM_DEMOS.forEach((item, idx) => {
@@ -820,6 +1080,41 @@
       div.textContent = line;
       el.simPipelineView.appendChild(div);
     });
+  }
+
+  function renderBpeToggle() {
+    el.bpeModeBad.hidden = state.bpeShowGood;
+    el.bpeModeGood.hidden = !state.bpeShowGood;
+    el.bpeToggleBtn.textContent = state.bpeShowGood ? "切回 BPE 盲区对比" : "切换为单字母分词";
+  }
+
+  // ---- Slide 8: Bridge Node Explorer ----
+  function renderBridgeStage() {
+    el.bridgeNodes.forEach((node, idx) => {
+      node.classList.toggle("is-active", idx === state.bridgeStageIdx);
+    });
+    const cur = BRIDGE_NODES[state.bridgeStageIdx];
+    el.bridgeDetailBox.innerHTML = "";
+
+    const title = document.createElement("h3");
+    title.style.margin = "0 0 6px";
+    title.textContent = cur.title;
+
+    const desc = document.createElement("p");
+    desc.className = "body-copy";
+    desc.textContent = cur.desc;
+
+    const tags = document.createElement("div");
+    tags.className = "noise-chips";
+    tags.style.marginTop = "10px";
+    cur.tags.forEach((t) => {
+      const span = document.createElement("span");
+      span.className = "tag-pill is-blue";
+      span.textContent = t;
+      tags.appendChild(span);
+    });
+
+    el.bridgeDetailBox.append(title, desc, tags);
   }
 
   // ---- Slide 9: Dorm Compare Cases ----
@@ -855,6 +1150,14 @@
     });
   }
 
+  function applyRevealState() {
+    el.colBase.classList.toggle("is-concealed", state.revealStep < 1);
+    el.colUserA.classList.toggle("is-concealed", state.revealStep < 2);
+    el.colUserB.classList.toggle("is-concealed", state.revealStep < 3);
+    el.revealModelsBtn.textContent =
+      state.revealStep >= 3 ? "逐步对比" : `揭晓下一模型 (${state.revealStep}/3)`;
+  }
+
   function renderCompareCases() {
     const cases = state.compareCases;
     if (!cases.length) return;
@@ -881,6 +1184,7 @@
     renderPredColumn(el.caseBasePred, current.base_pred);
     renderPredColumn(el.caseUserAPred, current.user_a_pred);
     renderPredColumn(el.caseUserBPred, current.user_b_pred);
+    applyRevealState();
   }
 
   function parseCasesPayload(raw) {
@@ -1109,7 +1413,16 @@
   }
 
   function bindEvents() {
-    el.slideTabs.forEach((tab, idx) => tab.addEventListener("click", () => goToSlide(idx)));
+    bindExpandables();
+
+    // 段落关键词线索跳转
+    document.querySelectorAll("[data-goto]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const target = Number(btn.dataset.goto);
+        if (!Number.isNaN(target)) goToSlide(target);
+      });
+    });
+
     el.prevSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide - 1));
     el.nextSlideBtn.addEventListener("click", () => goToSlide(state.currentSlide + 1));
     el.fullscreenBtn.addEventListener("click", toggleFullscreen);
@@ -1118,6 +1431,49 @@
     el.toggleSidebarBtn.addEventListener("click", () => {
       state.sidebarManualOverride = true;
       setSidebarVisible(!state.sidebarVisible);
+    });
+
+    // Slide 1 WeChat interactions
+    el.replayWx1Btn.addEventListener("click", replayWxKeystrokes);
+    el.wxStepTabs.forEach((btn, idx) => {
+      btn.addEventListener("click", () => {
+        state.wxStepIdx = idx;
+        renderWxStep();
+      });
+    });
+
+    // Slide 2 WeType interactive pipeline
+    el.wtNodes.forEach((node, idx) => {
+      node.addEventListener("click", () => {
+        state.wtStageIdx = idx;
+        renderWtStage();
+      });
+    });
+
+    // Slide 6 Hysteresis slider
+    el.hystSlider.addEventListener("input", (e) => updateHystSimulation(e.target.value));
+    el.hystPresetBtns.forEach((btn) => {
+      btn.addEventListener("click", () => updateHystSimulation(btn.dataset.rate));
+    });
+
+    // Slide 7 BPE toggle
+    el.bpeToggleBtn.addEventListener("click", () => {
+      state.bpeShowGood = !state.bpeShowGood;
+      renderBpeToggle();
+    });
+
+    // Slide 8 Bridge explorer
+    el.bridgeNodes.forEach((node, idx) => {
+      node.addEventListener("click", () => {
+        state.bridgeStageIdx = idx;
+        renderBridgeStage();
+      });
+    });
+
+    // Slide 9 progressive reveal
+    el.revealModelsBtn.addEventListener("click", () => {
+      state.revealStep = state.revealStep >= 3 ? 1 : state.revealStep + 1;
+      applyRevealState();
     });
 
     window.addEventListener("keydown", (e) => {
@@ -1197,10 +1553,15 @@
     setSidebarVisible(false);
     renderQrCode();
     goToSlide(0);
+    renderWxStep();
+    renderWtStage();
     renderRuleCompilerDemo();
-    renderNoiseSimDemo();
-    renderCompareCases();
     renderInteractionWall();
+    updateHystSimulation(10);
+    renderNoiseSimDemo();
+    renderBpeToggle();
+    renderBridgeStage();
+    renderCompareCases();
     bindEvents();
 
     loadExternalCasesIfSpecified();

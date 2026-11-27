@@ -89,68 +89,68 @@
 
   const BUILTIN_CASES = [
     {
-      context: "下课了等会儿一起去",
+      context: "然后把日志完善",
+      raw_keys: "yixa",
+      base_pred: "1. 胰腺癌（漏敲 i 导致音节切崩）",
+      user_a_pred: "1. 一下 [TOP1 命中]",
+      user_b_pred: "1. 一下 | 2. 一些啊 | 3. 一小啊  [270ms · TOP1]",
+      note: "PC 真实日志 win_seq34：高频漏介母 i，两套模型均成功救回「一下」。",
+    },
+    {
+      context: "你可以先把没啥用的脏库",
+      raw_keys: "shanyxia",
+      base_pred: "1. 闪一下（原生未感知上文「脏库」）",
+      user_a_pred: "1. 上一下 [MISS · 自由解码偏音]",
+      user_b_pred: "1. 删一下 | 2. 闪一下 | 3. 山一下  [636ms · TOP1]",
+      note: "PC 真实日志 win_seq73：漏敲 i，Qwen3 结合上文「脏库」精准把「删一下」推上第 1。",
+    },
+    {
+      context: "你好我是（手机拇指连打）",
+      raw_keys: "wishi",
+      base_pred: "1. 卫视 / 五十（o 误触邻键 i）",
+      user_a_pred: "1. 为是 [MISS · 无 Trie 约束]",
+      user_b_pred: "1. 我是 | 2. 卫视 | 3. 五十  [103ms · TOP1]",
+      note: "Android 真实日志：手机端 i→o 误触累计 13 次，Trie 邻键容错 103ms 直接救回「我是」。",
+    },
+    {
+      context: "主要是我的键盘现在也有点小问题，有时候会",
+      raw_keys: "lianda",
+      base_pred: "1. 脸大（原生高频词压过上下文）",
+      user_a_pred: "1. 练的啊 [MISS · 29M 语义偏弱]",
+      user_b_pred: "1. 连打 | 2. 连弹 | 3. 亮大  [315ms · TOP1]",
+      note: "PC 真实日志 win_seq46：结合上文「键盘小问题」，Qwen3 轻松实现同音上下文消歧。",
+    },
+    {
+      context: "我尝试使用雾凇输入法",
+      raw_keys: "wanyxi",
+      base_pred: "1. 玩游戏 / 挽一席（漏 i 且砍尾 a）",
+      user_a_pred: "1. 玩游戏 [MISS]",
+      user_b_pred: "1. 玩一下 | 2. 玩游戏 | 3. 玩一些  [380ms · TOP1]",
+      note: "Android 真实日志：手机端 18.7% 高省码率典型案例，漏介母+砍尾音仍被拉回第 1。",
+    },
+    {
+      context: "刚下课好饿，",
       raw_keys: "wmxqcf",
-      base_pred: "1. 我们先去吃饭  2. 为什么去采访",
-      user_a_pred: "1. 我明天去吃饭（室友常约次日餐）",
-      user_b_pred: "1. 我马上写代码去食堂（A/B 习惯差异）",
-      note: "全声母重度简拼 wmxqcf，通用词库几乎无法猜中；微调后直接结合室友日常高频表达排序。",
+      base_pred: "1. 无法整句出词（仅零碎单字）",
+      user_a_pred: "1. 我们下去吃饭 [MISS · 缺一字偏差]",
+      user_b_pred: "1. 我们先去吃饭 | 2. 我没心情吃饭  [817ms · TOP1]",
+      note: "6 字纯首字母极速简拼，8105 Trie 硬锁声母边界 + 语义先验直接整句命中。",
     },
     {
-      context: "晚上回寝室记得",
-      raw_keys: "paoshibnie",
-      base_pred: "1. 跑失别（乱码切分）",
-      user_a_pred: "1. 泡十遍了（蹭键 b/n 纠偏）",
-      user_b_pred: "1. 泡方便面（旁键物理坐标加日常习惯）",
-      note: "出现 b/n 物理邻键顺带蹭键，2D 键距惩罚结合个人习惯把真实意图拉回第 1。",
+      context: "下午三点去",
+      raw_keys: "tsgzx",
+      base_pred: "1. 无法整句出词",
+      user_a_pred: "1. 天上广州下 [MISS · 裸解码幻觉]",
+      user_b_pred: "1. 图书馆找小 | 2. 图书馆自习  [621ms · TOP2]",
+      note: "29M 无约束自由解码出现严重语义发散；Qwen3+Trie 稳定锁定「图书馆自习」。",
     },
     {
-      context: "导员在群里催",
-      raw_keys: "qiandlkqc",
-      base_pred: "1. 钱多了快去吃  2. 签订了看清楚",
-      user_a_pred: "1. 签到了快起床",
-      user_b_pred: "1. 签到了快去传",
-      note: "同学 A 常打早起签到提醒；同学 B 常交实验报告，相同省键输入分化出完全不同首选。",
-    },
-    {
-      context: "这周进度太慢",
-      raw_keys: "zzenmk",
-      base_pred: "1. 怎么看",
-      user_a_pred: "1. 真怎么快（zh=z + eng=en 双叠加）",
-      user_b_pred: "1. 真正模块（高频写代码术语偏好）",
-      note: "同时叠加平翘舌与前后鼻音习惯偏差。",
-    },
-    {
-      context: "先把这个",
-      raw_keys: "gnsxie",
-      base_pred: "1. 概念写  2. 给你写",
-      user_a_pred: "1. 功能实现（专业高频短语）",
-      user_b_pred: "1. 观念写下来",
-      note: "跨专业语料微调后，专业词组显著压过通用生活词。",
-    },
-    {
-      context: "明天早上记得",
-      raw_keys: "dmql",
-      base_pred: "1. 打麻去了  2. 点名起了",
-      user_a_pred: "1. 点名起来（寝室互喊早八）",
-      user_b_pred: "1. 导明起了",
-      note: "极短 4 键简拼 dmql 极度依赖个体作息分布。",
-    },
-    {
-      context: "这个脚本刚跑",
-      raw_keys: "baoco",
-      base_pred: "1. 保错  2. 抱错",
-      user_a_pred: "1. 报错了（缺 u 声调语癖修正）",
-      user_b_pred: "1. 报酬",
-      note: "漏敲尾键叠加专业上下文消歧。",
-    },
-    {
-      context: "刚才发错群了",
-      raw_keys: "chhuai",
-      base_pred: "1. 撤回（未命中完整 chehui）",
-      user_a_pred: "1. 撤回啊（c/ch + e/u 误触修正）",
-      user_b_pred: "1. 出坏了",
-      note: "非标准错拼在 8105 Trie 惩罚预算内实现纠偏。",
+      context: "我最近一直在调教（诚实短板案例）",
+      raw_keys: "wuson",
+      base_pred: "1. 伍松 / 吴松（砍尾 g + 低频专词）",
+      user_a_pred: "1. 无送 [MISS]",
+      user_b_pred: "1. 伍松 | 2. 勿松 | 3. 吴松  [351ms · 待个人续训]",
+      note: "当前权重仅用通用 LCCC 训得，尚未混入 3 天个人日志；周末增量微调即可记住「雾凇」。",
     },
   ];
 
@@ -998,7 +998,7 @@
       col.classList.toggle("is-concealed", i >= state.revealStep);
     });
     const btn = document.getElementById("reveal-models-btn");
-    if (btn) btn.textContent = state.revealStep >= 3 ? "已全部揭晓（重置）" : "逐个揭晓 A/B 结果";
+    if (btn) btn.textContent = state.revealStep >= 3 ? "已全部揭晓（重置）" : "逐列揭晓模型实测";
     updateRevealButtonLabel();
   }
 

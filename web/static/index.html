@@ -506,20 +506,20 @@
               </div>
 
               <div class="s6-right">
-                <div class="guard-box is-veiled" data-step="1" data-veil-hint="点击揭晓 01：脱敏采样与首犯快照">
-                  <span class="guard-k">01 · IME_LOGGER.LUA</span>
-                  <h4>隐私硬拦截 + 首次退格抓手癖</h4>
-                  <p>落盘前拦截 4 位数字（<code>%d%d%d%d</code>）、<code>@</code>、<code>://</code>、<code>sk-</code>/<code>ghp_</code>/<code>AKIA</code> 密钥；只在首次退格记下 <code>first_attempt</code>，&lt;80ms 标为硬件抖动。</p>
+                <div class="guard-box is-veiled" data-step="1" data-veil-hint="点击揭晓 01：3 天 2,651 条真实双端画像">
+                  <span class="guard-k">01 · 3 天实测画像（2,651 条 / 5,371 字）</span>
+                  <h4>自动揪出跨设备硬件与手指指纹</h4>
+                  <p>PC 端（825 条）揪出旧键盘 <code>m</code> 键 &lt;80ms 连击 <strong>18 次</strong>与漏介母（<code>yixa</code>/<code>cowu</code>）；手机端（1,826 条）揪出 <strong>18.7% 省码</strong>、<strong>43.6% 非首选</strong>及邻键误触 <code>i→o(13)</code> / <code>r→e(7)</code> / <code>f→d(4)</code>。</p>
                 </div>
-                <div class="guard-box is-veiled" data-step="2" data-veil-hint="点击揭晓 02：受控注释区热更新">
-                  <span class="guard-k">02 · RULE_UPDATER.PY</span>
-                  <h4>样本 >= 20 且只写受控区，绝不覆盖手写配置</h4>
-                  <p>近 <strong>500 条滑窗</strong> 达标后仅替换 <code># BEGIN/END PERSONAL-IME AUTO RULES</code> 标记区块，保留其余手写调优。</p>
+                <div class="guard-box is-veiled" data-step="2" data-veil-hint="点击揭晓 02：滑窗防抖实测（拒绝误开）">
+                  <span class="guard-k">02 · RULE_UPDATER.PY 实测决策</span>
+                  <h4>24 条模糊音均 &lt;7%，迟滞阈值克制防污染</h4>
+                  <p>实测 <code>l=r</code> 0%、<code>l=n</code> 0.2%、<code>z=zh</code> 4.9%、<code>in=ing</code> 7.0%，全部低于 15% 开启线——系统自动<strong>拒绝盲开模糊音</strong>，仅在达标时热更新受控区并轻提示 3 次。</p>
                 </div>
-                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：3 次轻提醒后自动隐身">
-                  <span class="guard-k">03 · RULE_NOTIFY.LUA</span>
-                  <h4>零弹窗轻提示，满 3 次即静默回流</h4>
-                  <p>变更仅在后续 3 次首候选尾缀轻提示 <code>[已开启 ong=on]</code>，满 3 次自动静默；脱敏日志同时继续为 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 积累样本。</p>
+                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：系统据此自动执行的操作">
+                  <span class="guard-k">03 · 自动分流响应动作</span>
+                  <h4>硬件隔离 + 短期记忆 + 噪声反哺小模型</h4>
+                  <p>按 <code>hw_tag: old_kb</code> 隔离 <code>m</code> 键连击样本；开启 <strong>800 字短期热词记忆</strong>压低手机非首选率；并将邻键/省码分布反哺 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 做针对性纠错微调。</p>
                 </div>
               </div>
             </div>
@@ -589,16 +589,16 @@
                   </div>
                 </div>
 
-                <div class="dual-models is-veiled" data-step="2" data-veil-hint="点击揭晓端侧双尺寸微调路线">
+                <div class="dual-models is-veiled" data-step="2" data-veil-hint="点击揭晓端侧双尺寸微调路线（附 RTX 5060 实测）">
                   <div class="m-card m-dark">
-                    <span class="m-k">高精度微调路线</span>
-                    <h4>Qwen3-0.6B LoRA</h4>
-                    <p><code>r=16, alpha=32</code> · 7 投影层增量适应个人表达分布</p>
+                    <span class="m-k">高精度微调路线 · 40MB LoRA</span>
+                    <h4>Qwen3-0.6B LoRA + Trie</h4>
+                    <p>16 条真实翻车用例 <strong>Top-1 62.5% / Top-3 75.0%</strong> · <code>pc_kb 36%</code></p>
                   </div>
                   <div class="m-card m-light">
-                    <span class="m-k">超轻量极速路线</span>
-                    <h4>29M INT8 Transformer</h4>
-                    <p>纯端侧 CPU 毫秒首候选 · <code>6000+</code> 字表轻量运行</p>
+                    <span class="m-k">超轻量极速路线 · ~29MB INT8</span>
+                    <h4>29M 字级 Transformer</h4>
+                    <p>纯 CPU INT8 实测 <strong>96.1ms</strong> · 真实翻车 <code>Top-1 37.5%</code> (裸解码对照)</p>
                   </div>
                 </div>
 
@@ -688,17 +688,17 @@
             </div>
           </section>
 
-          <!-- ==================== MODULE 09: 闭环 C · 寝室实证对比 ==================== -->
-          <section id="mod-9" class="module" data-index="8" data-title="09 · 闭环 C：寝室实证对比" data-loop="闭环 C · 效果收官">
+          <!-- ==================== MODULE 09: 闭环 C · 真实日志模型实测对比 ==================== -->
+          <section id="mod-9" class="module" data-index="8" data-title="09 · 闭环 C：真实翻车实测" data-loop="闭环 C · 效果收官">
             <div class="mod-head">
               <div>
-                <div class="kicker">09 // LOOP C · REAL DORMITORY BENCHMARK</div>
-                <h2 class="h1">同一个错拼，在基线与两位同学上的<span class="rust">千人千面分化</span></h2>
+                <div class="kicker">09 // LOOP C · REAL LOG BENCHMARK (RTX 5060)</div>
+                <h2 class="h1">3 天真实翻车日志实测：<span class="rust">原生 vs 29M vs Qwen3+Trie</span></h2>
               </div>
               <div class="s9-actions">
-                <span id="cases-source-pill" class="tag tag-dark">内置寝室实测对照 (8 条)</span>
-                <button id="reveal-models-btn" class="hud-btn hud-btn-solid" type="button">逐个揭晓 A/B 结果</button>
-                <label class="hud-btn file-label" title="导入本地 eval_compare.json">导入 JSON
+                <span id="cases-source-pill" class="tag tag-dark">100% 本地实测 (Top-3 75%)</span>
+                <button id="reveal-models-btn" class="hud-btn hud-btn-solid" type="button">逐列揭晓模型实测</button>
+                <label class="hud-btn file-label" title="导入本地 cases_compare.json">导入 JSON
                   <input id="cases-file-input" type="file" accept=".json,application/json" hidden />
                 </label>
               </div>
@@ -712,17 +712,17 @@
 
             <div class="s9-hero-bar">
               <div>
-                <span class="ih-k">上文语境 CONTEXT</span>
+                <span class="ih-k">真实上文 CONTEXT</span>
                 <div id="case-context-val" class="ih-context"></div>
               </div>
               <div class="ih-sep"></div>
               <div>
-                <span class="ih-k">原始残缺键入 RAW KEYS</span>
+                <span class="ih-k">真实翻车键入 RAW KEYS</span>
                 <code id="case-keys-val" class="ih-keys"></code>
               </div>
               <div class="ih-sep"></div>
               <div>
-                <span class="ih-k">为什么会分化</span>
+                <span class="ih-k">诊断与系统动作</span>
                 <div id="case-note-val" class="ih-note"></div>
               </div>
             </div>
@@ -730,24 +730,24 @@
             <div id="case-compare-grid" class="s9-compare-grid">
               <div class="cmp-col cmp-base" data-model-col="0">
                 <div class="cmp-head">
-                  <span class="cmp-tag">BASELINE · 通用微调基座</span>
-                  <span class="cmp-sub">未注入个人语料偏置</span>
+                  <span class="cmp-tag">BASELINE · 原生 Rime 雾凇</span>
+                  <span class="cmp-sub">真实日志中触发退格/非首选</span>
                 </div>
                 <div id="case-base-pred" class="cmp-pred"></div>
               </div>
 
               <div class="cmp-col cmp-ua is-concealed" data-model-col="1">
                 <div class="cmp-head">
-                  <span class="cmp-tag tag-blue">USER A · 同学 A 个性化微调</span>
-                  <span class="cmp-sub">专属日常语料 &amp; 口癖分布</span>
+                  <span class="cmp-tag tag-blue">29M 字级 Transformer</span>
+                  <span class="cmp-sub">无约束自由解码 · CPU INT8 96ms · 6/16</span>
                 </div>
                 <div id="case-ua-pred" class="cmp-pred"></div>
               </div>
 
               <div class="cmp-col cmp-ub is-concealed" data-model-col="2">
                 <div class="cmp-head">
-                  <span class="cmp-tag tag-rust">USER B · 同学 B 个性化微调</span>
-                  <span class="cmp-sub">不同作息/专业背景分布</span>
+                  <span class="cmp-tag tag-rust">Qwen3-0.6B LoRA + Trie</span>
+                  <span class="cmp-sub">8105 读音硬约束 · Top-1 10/16 · Top-3 12/16</span>
                 </div>
                 <div id="case-ub-pred" class="cmp-pred"></div>
               </div>

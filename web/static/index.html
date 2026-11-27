@@ -506,20 +506,20 @@
               </div>
 
               <div class="s6-right">
-                <div class="guard-box is-veiled" data-step="1" data-veil-hint="点击揭晓 01：3 天 2,651 条真实双端画像">
-                  <span class="guard-k">01 · 3 天实测画像（2,651 条 / 5,371 字）</span>
-                  <h4>自动揪出跨设备硬件与手指指纹</h4>
-                  <p>PC 端（825 条）揪出旧键盘 <code>m</code> 键 &lt;80ms 连击 <strong>18 次</strong>与漏介母（<code>yixa</code>/<code>cowu</code>）；手机端（1,826 条）揪出 <strong>18.7% 省码</strong>、<strong>43.6% 非首选</strong>及邻键误触 <code>i→o(13)</code> / <code>r→e(7)</code> / <code>f→d(4)</code>。</p>
+                <div class="guard-box is-veiled" data-step="1" data-veil-hint="点击揭晓 01：连续 3 天真实数据统计">
+                  <span class="guard-k">01 · 3 天真实记录（2,651 次 / 5,371 字）</span>
+                  <h4>PC 与手机端常见的错键情况</h4>
+                  <p>PC 端（825 条）主要是旧键盘 <code>m</code> 键 &lt;80ms 连击 <strong>18 次</strong>与漏打字母（<code>yixa</code>/<code>cowu</code>）；手机端（1,826 条）主要是 <strong>18.7% 省码</strong>、<strong>43.6% 非首选</strong>，以及邻键按偏 <code>i→o(13)</code> / <code>r→e(7)</code> / <code>f→d(4)</code>。</p>
                 </div>
-                <div class="guard-box is-veiled" data-step="2" data-veil-hint="点击揭晓 02：滑窗防抖实测（拒绝误开）">
-                  <span class="guard-k">02 · RULE_UPDATER.PY 实测决策</span>
-                  <h4>24 条模糊音均 &lt;7%，迟滞阈值克制防污染</h4>
-                  <p>实测 <code>l=r</code> 0%、<code>l=n</code> 0.2%、<code>z=zh</code> 4.9%、<code>in=ing</code> 7.0%，全部低于 15% 开启线——系统自动<strong>拒绝盲开模糊音</strong>，仅在达标时热更新受控区并轻提示 3 次。</p>
+                <div class="guard-box is-veiled" data-step="2" data-veil-hint="点击揭晓 02：模糊音规则检查结果">
+                  <span class="guard-k">02 · 模糊音规则检查</span>
+                  <h4>24 条规则均低于 7%，不自动开启</h4>
+                  <p>实测 <code>l=r</code> 0%、<code>l=n</code> 0.2%、<code>z=zh</code> 4.9%、<code>in=ing</code> 7.0%，都没有达到 15% 的开启阈值，因此不会乱开模糊音，避免增加重码。</p>
                 </div>
-                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：时空联合防误触与分流响应">
-                  <span class="guard-k">03 · 时空联合防误触 &amp; 分流响应</span>
-                  <h4>Δt + 2D 键距白名单分流，高频去抖、歧义交模型</h4>
-                  <p>同键 <code>&lt;80ms</code>（如 <code>m</code> 键）及 <code>&lt;45ms</code> 紧邻非法组合（如 <code>bn</code>/<code>fg</code>）高频固化去抖；合法邻键（<code>er</code>/<code>ui</code>/<code>io</code>）与高省码则交由 <strong>800 字短期记忆</strong>及 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 消歧。</p>
+                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：按错键场景分类处理">
+                  <span class="guard-k">03 · 按场景分类处理规则</span>
+                  <h4>确定的写进规则，有歧义的交给模型</h4>
+                  <p>同键连击（<code>&lt;80ms</code> 如 <code>m</code> 键）和极短间隔的非法邻键（<code>&lt;45ms</code> 如 <code>bn</code>/<code>fg</code>）高频后直接写死过滤；合法邻键（<code>er</code>/<code>ui</code>/<code>io</code>）和省码错拼交由 <strong>800 字短期记忆</strong>及 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 判断。</p>
                 </div>
               </div>
             </div>

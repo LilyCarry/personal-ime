@@ -516,10 +516,10 @@
                   <h4>24 条模糊音均 &lt;7%，迟滞阈值克制防污染</h4>
                   <p>实测 <code>l=r</code> 0%、<code>l=n</code> 0.2%、<code>z=zh</code> 4.9%、<code>in=ing</code> 7.0%，全部低于 15% 开启线——系统自动<strong>拒绝盲开模糊音</strong>，仅在达标时热更新受控区并轻提示 3 次。</p>
                 </div>
-                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：系统据此自动执行的操作">
-                  <span class="guard-k">03 · 自动分流响应动作</span>
-                  <h4>硬件隔离 + 短期记忆 + 噪声反哺小模型</h4>
-                  <p>按 <code>hw_tag: old_kb</code> 隔离 <code>m</code> 键连击样本；开启 <strong>800 字短期热词记忆</strong>压低手机非首选率；并将邻键/省码分布反哺 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 做针对性纠错微调。</p>
+                <div class="guard-box is-veiled" data-step="3" data-veil-hint="点击揭晓 03：时空联合防误触与分流响应">
+                  <span class="guard-k">03 · 时空联合防误触 &amp; 分流响应</span>
+                  <h4>Δt + 2D 键距白名单分流，高频去抖、歧义交模型</h4>
+                  <p>同键 <code>&lt;80ms</code>（如 <code>m</code> 键）及 <code>&lt;45ms</code> 紧邻非法组合（如 <code>bn</code>/<code>fg</code>）高频固化去抖；合法邻键（<code>er</code>/<code>ui</code>/<code>io</code>）与高省码则交由 <strong>800 字短期记忆</strong>及 <button type="button" class="kw-link" data-jump="6" data-jump-note="返回 06 · 使用中智能切换">闭环 C 小模型</button> 消歧。</p>
                 </div>
               </div>
             </div>

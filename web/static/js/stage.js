@@ -1043,25 +1043,27 @@
 
     const input = document.getElementById("cases-file-input");
     const pill = document.getElementById("cases-source-pill");
-    input.addEventListener("change", () => {
-      const f = input.files && input.files[0];
-      if (!f) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(String(reader.result));
-          const list = Array.isArray(parsed) ? parsed : parsed.cases;
-          if (Array.isArray(list) && list.length > 0) {
-            state.cases = list;
-            pill.textContent = `已载入：${f.name} (${list.length} 条)`;
-            rebuildCasePills();
+    if (input) {
+      input.addEventListener("change", () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(String(reader.result));
+            const list = Array.isArray(parsed) ? parsed : parsed.cases;
+            if (Array.isArray(list) && list.length > 0) {
+              state.cases = list;
+              if (pill) pill.textContent = `已载入：${f.name} (${list.length} 条)`;
+              rebuildCasePills();
+            }
+          } catch (_err) {
+            if (pill) pill.textContent = "JSON 格式无效";
           }
-        } catch (_err) {
-          pill.textContent = "JSON 格式无效";
-        }
-      };
-      reader.readAsText(f, "utf-8");
-    });
+        };
+        reader.readAsText(f, "utf-8");
+      });
+    }
 
     const ext = new URLSearchParams(window.location.search).get("cases");
     if (ext) {

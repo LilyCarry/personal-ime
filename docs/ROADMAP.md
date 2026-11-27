@@ -22,14 +22,14 @@ rime/lua/ (规则热加载 + 无感切换 + 提醒)       model/ (Qwen3-LoRA / 2
 
 | Issue | 归属 | 标题 | 建议分支 | 依赖 | 状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| [#1](https://github.com/LilyCarry/personal-ime/issues/1) | 目标一 | 定义标准可量化拼音规则词表与 Rime algebra 导出模块 | `feat/issue-1-rules-schema` | 无 | Open |
-| [#2](https://github.com/LilyCarry/personal-ime/issues/2) | 目标一 | 搭建 FastAPI 竞速后端与阿里云实时排行榜 API | `feat/issue-2-web-leaderboard` | 无 | Open |
-| [#3](https://github.com/LilyCarry/personal-ime/issues/3) | 目标一 | 接入 DeepSeek 风格点评与量化规则推荐接口 (`/api/analyze`) | `feat/issue-3-deepseek-analyzer` | #1, #2 | Open |
-| [#4](https://github.com/LilyCarry/personal-ime/issues/4) | 目标一 | 开发手机/PC 扫码打字竞速与规则配置页 (`/play`) | `feat/issue-4-web-play-page` | #2, #3 | Open |
-| [#5](https://github.com/LilyCarry/personal-ime/issues/5) | 目标一 | 开发大屏互动演示页 (`/`, 替代 PPT) 与右侧实时排行榜 | `feat/issue-5-web-stage-page` | #2 | Open |
-| [#6](https://github.com/LilyCarry/personal-ime/issues/6) | 目标一 | 实现基于 Rime 日志的滑动窗口规则校准与无感切换提醒 | `feat/issue-6-rime-adaptive-rules` | #1 | Open |
-| [#7](https://github.com/LilyCarry/personal-ime/issues/7) | 目标二 | 寝室双人（本人 vs 室友）个性化 LoRA 对比微调与案例集 | `feat/issue-7-persona-compare` | 无 | Open |
-| [#8](https://github.com/LilyCarry/personal-ime/issues/8) | 目标二 | 训练前后评测基准与消融实验报告 (`docs/EVALUATION.md`) | `docs/issue-8-eval-benchmark` | 无 | Open |
+| [#1](https://github.com/LilyCarry/personal-ime/issues/1) | 目标一 | 定义标准可量化拼音规则词表与 Rime algebra 导出模块 | `feat/issue-1-rules-schema` | 无 | Done (PR #9) |
+| [#2](https://github.com/LilyCarry/personal-ime/issues/2) | 目标一 | 搭建 FastAPI 竞速后端与阿里云实时排行榜 API | `feat/issue-2-web-leaderboard` | 无 | Done (PR #10) |
+| [#3](https://github.com/LilyCarry/personal-ime/issues/3) | 目标一 | 接入 DeepSeek 风格点评与量化规则推荐接口 (`/api/analyze`) | `feat/issue-3-deepseek-analyzer` | #1, #2 | Done (PR #11) |
+| [#4](https://github.com/LilyCarry/personal-ime/issues/4) | 目标一 | 开发手机/PC 扫码打字竞速与规则配置页 (`/play`) | `feat/issue-4-web-play-page` | #2, #3 | Done (PR #12) |
+| [#5](https://github.com/LilyCarry/personal-ime/issues/5) | 目标一 | 开发大屏互动演示页 (`/`, 替代 PPT) 与右侧实时排行榜 | `feat/issue-5-web-stage-page` | #2 | Done (PR #14) |
+| [#6](https://github.com/LilyCarry/personal-ime/issues/6) | 目标一 | 实现基于 Rime 日志的滑动窗口规则校准与无感切换提醒 | `feat/issue-6-rime-adaptive-rules` | #1 | Done (PR #13) |
+| [#7](https://github.com/LilyCarry/personal-ime/issues/7) | 目标二 | 寝室双人（本人 vs 室友）个性化 LoRA 对比微调与案例集 | `feat/issue-7-persona-compare` | 无 | Closed（由 #8 真实实测替代） |
+| [#8](https://github.com/LilyCarry/personal-ime/issues/8) | 目标二 | 训练前后评测基准与消融实验报告 (`docs/EVALUATION.md`) | `docs/issue-8-eval-benchmark` | 无 | Done |
 
 ---
 

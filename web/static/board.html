@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Personal-IME | 课堂实时排行榜</title>
+  <link rel="stylesheet" href="/static/css/play.css">
+  <style>
+    .board-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .summary-tile {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 10px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-label {
+      display: block;
+      font-size: 11px;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+
+    .summary-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .board-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--success);
+      background: var(--success-soft);
+      border: 1px solid #bbf7d0;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .sync-badge.is-error {
+      color: var(--danger);
+      background: var(--danger-soft);
+      border-color: #fecaca;
+    }
+
+    .board-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .board-row {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .board-row.rank-1 {
+      border-color: #f59e0b;
+      background: linear-gradient(180deg, #fffbeb 0%, #ffffff 70%);
+    }
+
+    .board-row.rank-2 {
+      border-color: #94a3b8;
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 70%);
+    }
+
+    .board-row.rank-3 {
+      border-color: #d97706;
+      background: linear-gradient(180deg, #fef3c7 0%, #ffffff 70%);
+    }
+
+    .board-rank {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: var(--surface-muted);
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .rank-1 .board-rank { background: #f59e0b; color: #ffffff; }
+    .rank-2 .board-rank { background: #64748b; color: #ffffff; }
+    .rank-3 .board-rank { background: #b45309; color: #ffffff; }
+
+    .board-main {
+      min-width: 0;
+    }
+
+    .board-name-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .board-nick {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    .board-title-pill {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 2px 7px;
+      border-radius: 999px;
+    }
+
+    .board-rules {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .board-rule-tag {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: var(--ink-muted);
+      background: var(--surface-muted);
+      padding: 1px 6px;
+      border-radius: 6px;
+    }
+
+    .board-score-col {
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .board-score {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .board-sub {
+      font-size: 11px;
+      color: var(--ink-soft);
+      white-space: nowrap;
+    }
+
+    .comments-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .comment-card {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-muted);
+      border-left: 3px solid var(--accent);
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+
+    .comment-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+
+    .comment-card-head strong {
+      color: var(--ink);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 28px 14px;
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">IME</span>
+        <div class="brand-text">
+          <span class="brand-title">Personal-IME</span>
+          <span class="brand-sub">课堂实时排行榜与趣味点评</span>
+        </div>
+      </div>
+      <a class="stage-link" href="/play" title="返回打字竞速">去打字</a>
+    </header>
+
+    <main class="main-container">
+      <section class="board-summary" aria-label="实时统计">
+        <div class="summary-tile">
+          <span class="summary-label">完赛人数</span>
+          <strong id="stat-total" class="summary-value mono">0</strong>
+        </div>
+        <div class="summary-tile">
+          <span class="summary-label">榜首综合分</span>
+          <strong id="stat-top-score" class="summary-value mono">--</strong>
+        </div>
+        <div class="summary-tile">
+          <span class="summary-label">高频手癖</span>
+          <strong id="stat-top-rule" class="summary-value mono">--</strong>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="board-toolbar">
+          <span id="sync-badge" class="sync-badge">4s 自动刷新</span>
+          <button id="refresh-btn" type="button" class="btn btn-ghost btn-sm">立即刷新</button>
+        </div>
+
+        <div id="board-empty" class="empty-state">
+          还没有同学完赛，点右上角「去打字」抢占榜一。
+        </div>
+        <ol id="board-list" class="board-list" hidden></ol>
+      </section>
+
+      <section id="comments-section" class="card" hidden style="margin-top: 14px;">
+        <div class="panel-header" style="margin-bottom: 4px;">
+          <div>
+            <h3>最新风格点评</h3>
+            <p class="panel-sub">实时同步最近完赛同学的 DeepSeek 趣味画像</p>
+          </div>
+        </div>
+        <div id="comments-feed" class="comments-feed"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const POLL_MS = 4000;
+      const el = {
+        total: document.getElementById("stat-total"),
+        topScore: document.getElementById("stat-top-score"),
+        topRule: document.getElementById("stat-top-rule"),
+        syncBadge: document.getElementById("sync-badge"),
+        refreshBtn: document.getElementById("refresh-btn"),
+        empty: document.getElementById("board-empty"),
+        list: document.getElementById("board-list"),
+        commentsSection: document.getElementById("comments-section"),
+        commentsFeed: document.getElementById("comments-feed"),
+      };
+
+      function escapeHtml(raw) {
+        return String(raw ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function render(data) {
+        const entries = Array.isArray(data.leaderboard) ? data.leaderboard : [];
+        const comments = Array.isArray(data.recent_comments) ? data.recent_comments : [];
+        const total = Number.isFinite(data.total) ? data.total : entries.length;
+
+        el.total.textContent = String(total);
+        el.topScore.textContent = entries.length ? Number(entries[0].score || 0).toFixed(1) : "--";
+
+        const ruleCounts = new Map();
+        entries.forEach((row) => {
+          (row.rules || []).forEach((r) => ruleCounts.set(r, (ruleCounts.get(r) || 0) + 1));
+        });
+        let topRule = "--";
+        let maxCount = 0;
+        ruleCounts.forEach((cnt, r) => {
+          if (cnt > maxCount) {
+            maxCount = cnt;
+            topRule = r;
+          }
+        });
+        el.topRule.textContent = topRule;
+
+        el.syncBadge.textContent = "4s 自动刷新";
+        el.syncBadge.classList.remove("is-error");
+
+        if (entries.length === 0) {
+          el.empty.hidden = false;
+          el.list.hidden = true;
+          el.list.innerHTML = "";
+        } else {
+          el.empty.hidden = true;
+          el.list.hidden = false;
+          el.list.innerHTML = entries
+            .map((entry, idx) => {
+              const rank = idx + 1;
+              const rankCls = rank <= 3 ? ` rank-${rank}` : "";
+              const tags = (entry.rules || [])
+                .slice(0, 3)
+                .map((r) => `<span class="board-rule-tag">${escapeHtml(r)}</span>`)
+                .join("");
+              const titleHtml = entry.title
+                ? `<span class="board-title-pill">${escapeHtml(entry.title)}</span>`
+                : "";
+              return `
+                <li class="board-row${rankCls}">
+                  <div class="board-rank mono">${rank}</div>
+                  <div class="board-main">
+                    <div class="board-name-row">
+                      <span class="board-nick">${escapeHtml(entry.nickname || "匿名")}</span>
+                      ${titleHtml}
+                    </div>
+                    <div class="board-rules">${tags}</div>
+                  </div>
+                  <div class="board-score-col">
+                    <div class="board-score mono">${Number(entry.score || 0).toFixed(1)} 分</div>
+                    <div class="board-sub mono">${Math.round(entry.cpm || 0)} 键/分 · ${Number(entry.accuracy || 0).toFixed(1)}%</div>
+                  </div>
+                </li>
+              `;
+            })
+            .join("");
+        }
+
+        if (comments.length > 0) {
+          el.commentsSection.hidden = false;
+          el.commentsFeed.innerHTML = comments
+            .slice(0, 8)
+            .map((c) => `
+              <div class="comment-card">
+                <div class="comment-card-head">
+                  <strong>${escapeHtml(c.nickname || "匿名")}</strong>
+                  <span>${escapeHtml(c.title || "")}</span>
+                </div>
+                <div>${escapeHtml(c.comment || "")}</div>
+              </div>
+            `)
+            .join("");
+        } else {
+          el.commentsSection.hidden = true;
+        }
+      }
+
+      async function poll() {
+        try {
+          const resp = await fetch("/api/leaderboard?limit=50", {
+            headers: { Accept: "application/json" },
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          render(await resp.json());
+        } catch {
+          el.syncBadge.textContent = "重连中...";
+          el.syncBadge.classList.add("is-error");
+        }
+      }
+
+      el.refreshBtn.addEventListener("click", poll);
+      poll();
+      window.setInterval(poll, POLL_MS);
+    })();
+  </script>
+</body>
+</html>

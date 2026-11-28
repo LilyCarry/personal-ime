@@ -125,16 +125,23 @@ def test_static_fallback_and_serving(tmp_path: Path) -> None:
     client_no_static = TestClient(app_no_static)
     r_index = client_no_static.get("/")
     r_play = client_no_static.get("/play")
+    r_board = client_no_static.get("/board")
+    r_present = client_no_static.get("/present")
     assert r_index.status_code == 200
     assert r_index.json()["status"] == "pending_frontend"
     assert r_play.status_code == 200
     assert r_play.json()["status"] == "pending_frontend"
+    assert r_board.status_code == 200
+    assert r_board.json()["status"] == "pending_frontend"
+    assert r_present.status_code == 200
+    assert r_present.json()["status"] == "pending_frontend"
 
-    # Case 2: web/static exists with index.html, play.html, and static asset
+    # Case 2: web/static exists with index.html, play.html, board.html, and static asset
     static_dir = tmp_path / "static"
     static_dir.mkdir()
     (static_dir / "index.html").write_text("<h1>Display</h1>", encoding="utf-8")
     (static_dir / "play.html").write_text("<h1>Play</h1>", encoding="utf-8")
+    (static_dir / "board.html").write_text("<h1>Board</h1>", encoding="utf-8")
     (static_dir / "app.js").write_text("console.log('ok');", encoding="utf-8")
 
     app_with_static = create_app(
@@ -142,8 +149,11 @@ def test_static_fallback_and_serving(tmp_path: Path) -> None:
         static_dir=static_dir,
     )
     client_with_static = TestClient(app_with_static)
-    assert client_with_static.get("/").text == "<h1>Display</h1>"
+    assert client_with_static.get("/").text == "<h1>Play</h1>"
     assert client_with_static.get("/play").text == "<h1>Play</h1>"
+    assert client_with_static.get("/board").text == "<h1>Board</h1>"
+    assert client_with_static.get("/present").text == "<h1>Display</h1>"
+    assert client_with_static.get("/stage").text == "<h1>Display</h1>"
     assert client_with_static.get("/static/app.js").text == "console.log('ok');"
 
 

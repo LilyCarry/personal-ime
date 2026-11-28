@@ -1088,7 +1088,7 @@
   // Live Right Panel (QR + /api/leaderboard + Reset)
   // ---------------------------------------------------------------------------
   function initQrAndClipboard() {
-    const playUrl = `${window.location.origin}/play`;
+    const playUrl = `${window.location.origin}/`;
     dom.playUrlText.textContent = playUrl;
     dom.qrContainer.innerHTML = QR_ALGO.toSvg(playUrl);
     dom.copyUrlBtn.addEventListener("click", () => {

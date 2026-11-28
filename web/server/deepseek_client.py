@@ -182,6 +182,27 @@ def _heuristic_fallback(
     )
 
 
+_ASYNC_CLIENT: httpx.AsyncClient | None = None
+
+
+def _get_async_client() -> httpx.AsyncClient:
+    """Return a shared async HTTP client with connection pooling for high concurrency."""
+    global _ASYNC_CLIENT
+    if _ASYNC_CLIENT is None or _ASYNC_CLIENT.is_closed:
+        _ASYNC_CLIENT = httpx.AsyncClient(
+            limits=httpx.Limits(max_connections=150, max_keepalive_connections=50),
+        )
+    return _ASYNC_CLIENT
+
+
+async def close_async_client() -> None:
+    """Close the shared async HTTP client on server shutdown."""
+    global _ASYNC_CLIENT
+    if _ASYNC_CLIENT is not None and not _ASYNC_CLIENT.is_closed:
+        await _ASYNC_CLIENT.aclose()
+    _ASYNC_CLIENT = None
+
+
 def _request_deepseek_json(
     endpoint: str,
     headers: dict[str, str],
@@ -193,6 +214,52 @@ def _request_deepseek_json(
         resp = client.post(endpoint, headers=headers, json=body)
         resp.raise_for_status()
         return resp.json()
+
+
+_DEFAULT_REQUEST_DEEPSEEK_JSON = _request_deepseek_json
+
+
+async def _request_deepseek_json_async(
+    endpoint: str,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    timeout_sec: float,
+) -> dict[str, Any]:
+    """Execute non-blocking HTTP POST to DeepSeek using the shared async pool."""
+    if _request_deepseek_json is not _DEFAULT_REQUEST_DEEPSEEK_JSON:
+        return _request_deepseek_json(endpoint, headers, body, timeout_sec)
+    client = _get_async_client()
+    resp = await client.post(endpoint, headers=headers, json=body, timeout=timeout_sec)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _parse_deepseek_response(
+    data: dict[str, Any],
+    *,
+    cpm: float,
+    accuracy: float,
+) -> AnalyzeResult:
+    """Parse and whitelist DeepSeek JSON payload into an AnalyzeResult."""
+    content = data["choices"][0]["message"]["content"]
+    parsed = json.loads(content)
+    if not isinstance(parsed, dict):
+        raise ValueError("DeepSeek JSON content is not an object")
+
+    title = str(parsed.get("title", "")).strip() or "节奏输入派"
+    comment = str(parsed.get("comment", "")).strip() or (
+        f"速度 {cpm:.1f} 字/分、精准度 {accuracy:.1f}%，已为你匹配专属拼音容错规则。"
+    )
+    valid_rules, rule_reasons = _extract_valid_rules(parsed)
+
+    return AnalyzeResult(
+        title=title,
+        comment=comment,
+        rules=valid_rules,
+        rule_reasons=rule_reasons,
+        rime_yaml=export_rime_algebra(valid_rules),
+        fallback=False,
+    )
 
 
 def analyze_typing_style(
@@ -242,10 +309,7 @@ def analyze_typing_style(
 
     try:
         data = _request_deepseek_json(endpoint, headers, body, timeout_sec)
-        content = data["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
-        if not isinstance(parsed, dict):
-            raise ValueError("DeepSeek JSON content is not an object")
+        return _parse_deepseek_response(data, cpm=cpm, accuracy=accuracy)
     except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
         return _heuristic_fallback(
             target_pinyin=target_pinyin,
@@ -255,17 +319,60 @@ def analyze_typing_style(
             backspaces=backspaces,
         )
 
-    title = str(parsed.get("title", "")).strip() or "节奏输入派"
-    comment = str(parsed.get("comment", "")).strip() or (
-        f"速度 {cpm:.1f} 字/分、精准度 {accuracy:.1f}%，已为你匹配专属拼音容错规则。"
-    )
-    valid_rules, rule_reasons = _extract_valid_rules(parsed)
 
-    return AnalyzeResult(
-        title=title,
-        comment=comment,
-        rules=valid_rules,
-        rule_reasons=rule_reasons,
-        rime_yaml=export_rime_algebra(valid_rules),
-        fallback=False,
-    )
+async def analyze_typing_style_async(
+    *,
+    target_text: str,
+    target_pinyin: str,
+    typed_input: str,
+    duration_sec: float,
+    cpm: float,
+    accuracy: float,
+    backspaces: int = 0,
+) -> AnalyzeResult:
+    """Non-blocking DeepSeek JSON Mode analysis with automatic local fallback."""
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return _heuristic_fallback(
+            target_pinyin=target_pinyin,
+            typed_input=typed_input,
+            cpm=cpm,
+            accuracy=accuracy,
+            backspaces=backspaces,
+        )
+
+    base_url = os.getenv("DEEPSEEK_BASE_URL", DEFAULT_BASE_URL).strip().rstrip("/")
+    model = os.getenv("DEEPSEEK_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    timeout_sec = _get_timeout_sec()
+    endpoint = f"{base_url}/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": model,
+        "messages": _build_messages(
+            target_text=target_text,
+            target_pinyin=target_pinyin,
+            typed_input=typed_input,
+            duration_sec=duration_sec,
+            cpm=cpm,
+            accuracy=accuracy,
+            backspaces=backspaces,
+        ),
+        "response_format": {"type": "json_object"},
+        "temperature": 0.7,
+    }
+
+    try:
+        data = await _request_deepseek_json_async(endpoint, headers, body, timeout_sec)
+        return _parse_deepseek_response(data, cpm=cpm, accuracy=accuracy)
+    except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        return _heuristic_fallback(
+            target_pinyin=target_pinyin,
+            typed_input=typed_input,
+            cpm=cpm,
+            accuracy=accuracy,
+            backspaces=backspaces,
+        )

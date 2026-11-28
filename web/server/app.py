@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from difflib import SequenceMatcher
 import os
 import secrets
@@ -15,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from profiler.rules_schema import export_catalog
-from web.server.deepseek_client import analyze_typing_style
+from web.server.deepseek_client import analyze_typing_style_async, close_async_client
 from web.server.storage import LeaderboardStorage
 
 DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
@@ -71,10 +72,19 @@ def create_app(
     static_dir: str | Path | None = None,
 ) -> FastAPI:
     """Create and configure the FastAPI leaderboard application."""
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):  # noqa: ANN202
+        try:
+            yield
+        finally:
+            await close_async_client()
+
     app = FastAPI(
         title="Personal-IME Leaderboard API",
-        version="0.1.0",
+        version="0.2.0",
         description="Realtime typing race leaderboard and static hosting backend.",
+        lifespan=_lifespan,
     )
 
     app.add_middleware(
@@ -91,23 +101,23 @@ def create_app(
     app.state.static_dir = resolved_static
 
     @app.get("/api/health")
-    def health() -> dict[str, str]:
+    async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/api/leaderboard")
-    def get_leaderboard(
+    async def get_leaderboard(
         limit: int = Query(default=30, ge=1, le=200),
     ) -> dict[str, Any]:
         return storage.get_leaderboard(limit=limit, recent_limit=10)
 
     @app.get("/api/rules/catalog")
-    def get_rules_catalog() -> list[dict[str, Any]]:
+    async def get_rules_catalog() -> list[dict[str, Any]]:
         return export_catalog()
 
     @app.post("/api/analyze")
-    def analyze_race(payload: AnalyzeRequest) -> dict[str, Any]:
+    async def analyze_race(payload: AnalyzeRequest) -> dict[str, Any]:
         cpm, accuracy, score = _compute_metrics(payload)
-        analysis = analyze_typing_style(
+        analysis = await analyze_typing_style_async(
             target_text=payload.target_text,
             target_pinyin=payload.target_pinyin,
             typed_input=payload.typed_input,
@@ -134,7 +144,7 @@ def create_app(
         }
 
     @app.post("/api/reset")
-    def reset_leaderboard(
+    async def reset_leaderboard(
         x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
     ) -> dict[str, Any]:
         expected_token = os.getenv("ADMIN_TOKEN", "").strip()
@@ -178,12 +188,24 @@ def create_app(
         return FileResponse(target)
 
     @app.get("/")
-    def serve_index() -> Any:
-        return _serve_static_page("index.html", "/")
+    async def serve_root_play() -> Any:
+        return _serve_static_page("play.html", "/")
 
     @app.get("/play")
-    def serve_play() -> Any:
+    async def serve_play() -> Any:
         return _serve_static_page("play.html", "/play")
+
+    @app.get("/board")
+    async def serve_board() -> Any:
+        return _serve_static_page("board.html", "/board")
+
+    @app.get("/present")
+    async def serve_present() -> Any:
+        return _serve_static_page("index.html", "/present")
+
+    @app.get("/stage")
+    async def serve_stage_alias() -> Any:
+        return _serve_static_page("index.html", "/stage")
 
     if resolved_static.is_dir():
         app.mount(

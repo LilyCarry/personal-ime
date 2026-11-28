@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -33,12 +34,16 @@ class LeaderboardStorage:
     def __init__(self, db_path: str | Path | None = None) -> None:
         self.db_path = resolve_db_path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._cache: dict[tuple[int, int], dict[str, Any]] = {}
         self.init_db()
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=10000;")
         return conn
 
     def init_db(self) -> None:
@@ -150,6 +155,8 @@ class LeaderboardStorage:
             ).fetchone()
         record = self._row_to_record(row)
         record["rank"] = int(rank_row["rank"]) if rank_row else 1
+        with self._lock:
+            self._cache.clear()
         return record
 
     def get_leaderboard(
@@ -161,6 +168,11 @@ class LeaderboardStorage:
         """Return total count, ranked leaderboard, and recent comment carousel."""
         safe_limit = max(1, min(int(limit), 200))
         safe_recent = max(1, min(int(recent_limit), 50))
+        cache_key = (safe_limit, safe_recent)
+        with self._lock:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                return cached
         with self._connect() as conn:
             total_row = conn.execute(
                 "SELECT COUNT(*) AS total FROM leaderboard_records"
@@ -203,14 +215,22 @@ class LeaderboardStorage:
                     "created_at": str(row["created_at"]),
                 }
             )
-        return {
+        result = {
             "total": int(total_row["total"]) if total_row else 0,
             "leaderboard": leaderboard,
             "recent_comments": recent_comments,
         }
+        with self._lock:
+            if len(self._cache) >= 16:
+                self._cache.clear()
+            self._cache[cache_key] = result
+        return result
 
     def reset(self) -> int:
         """Delete all leaderboard records and return the number of deleted rows."""
         with self._connect() as conn:
             cursor = conn.execute("DELETE FROM leaderboard_records")
-            return int(cursor.rowcount)
+            deleted = int(cursor.rowcount)
+        with self._lock:
+            self._cache.clear()
+        return deleted
